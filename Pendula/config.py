@@ -1,5 +1,5 @@
 """
-Konfiguracija — domen, izvori podataka, pragovi.
+Konfiguracija - domen, izvori podataka, pragovi.
 Potez Petrovac -> Ada Bojana (more ispred usca Bojane i samo usce, bez rijeke).
 """
 from dataclasses import dataclass, field
@@ -22,7 +22,7 @@ SST_TENDENCY_LAGS = (3, 7)  # dana unazad za dSST/dt
 # ------------------------------------------------------- COPERNICUS MARINE
 # Pristup preko copernicusmarine toolbox-a; kredencijali iz env varijabli
 # COPERNICUSMARINE_SERVICE_USERNAME / _PASSWORD
-# Identifikatori se NE upisuju rucno — mijenjaju se uz nove verzije produkata.
+# Identifikatori se NE upisuju rucno - mijenjaju se uz nove verzije produkata.
 # Umjesto toga zadajemo produkt i pravila prepoznavanja, pa panula/catalog.py
 # nadje tacan dataset u zivom katalogu i ispise sve kandidate.
 DATASETS = {
@@ -96,7 +96,7 @@ DATASETS = {
  
 # Meteo bez kljuca (vjetar, pritisak, oblacnost, padavine)
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
-# Proticaj Bojane (GloFAS) — za plumu i naplavine
+# Proticaj Bojane (GloFAS) - za plumu i naplavine
 OPEN_METEO_FLOOD = "https://flood-api.open-meteo.com/v1/flood"
 BOJANA_GAUGE = dict(lat=41.87, lon=19.36)
  
@@ -104,7 +104,7 @@ BOJANA_GAUGE = dict(lat=41.87, lon=19.36)
 @dataclass
 class SafetyThresholds:
     wave_amber: float = 1.0      # m, znacajna visina talasa
-    wave_red: float = 1.5        # m — korisnicki zadat prag
+    wave_red: float = 1.5        # m - korisnicki zadat prag
     wind_amber: float = 11.0     # cvorova
     wind_red: float = 15.0       # cvorova
     gust_red: float = 22.0       # cvorova
@@ -137,7 +137,7 @@ STATIC_VARS = [
     "dist_coast",         # km do obale
 ]
  
-# Poznate strukture (seke, olupine, rtovi) — dopunjavati iz iskustva
+# Poznate strukture (seke, olupine, rtovi) - dopunjavati iz iskustva
 STRUCTURES = [
     dict(name="Platamuni", lat=42.243, lon=18.719),
     dict(name="Katic", lat=42.098, lon=18.930),
