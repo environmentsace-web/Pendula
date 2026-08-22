@@ -64,8 +64,16 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
                 sp.troll_depth_m, vert["prey_center"], sp.follows_dcm,
                 MAX_TROLL_DEPTH)
             for f in feats:
-                f["properties"]["dubina_panule_m"] = _at(
-                    depth_field, f["properties"]["centroid"], lats, lons)
+                c = f["properties"]["centroid"]
+                f["properties"]["dubina_panule_m"] = _at(depth_field, c, lats, lons)
+                # Koliko se povrsinska temperatura mijenja u toj zoni —
+                # prostorno na 3 km i vremenski za tri dana.
+                f["properties"]["sst_raspon_C"] = _at(
+                    preds.get("sst_raspon_C"), c, lats, lons)
+                f["properties"]["sst_promjena_3d_C"] = _at(
+                    preds.get("sst_promjena_3d_C"), c, lats, lons)
+                f["properties"]["izgledi"] = _izgledi(
+                    f["properties"]["score_mean"])
  
             fc = {
                 "type": "FeatureCollection",
@@ -119,6 +127,18 @@ def _res_km(da) -> float:
     return None
  
  
+def _izgledi(skor: float) -> str:
+    """
+    Rijec uz broj. Skor je relativan u odnosu na domen, pa broj bez opisa
+    zavarava: 20/100 je najbolje sto danas ima, ali nije dobro.
+    """
+    if skor >= 60: return "vrlo dobri"
+    if skor >= 40: return "dobri"
+    if skor >= 25: return "osrednji"
+    if skor >= 12: return "slabi"
+    return "vrlo slabi"
+ 
+ 
 def _meteo_max(met, field: str, default: float) -> float:
     """Najveca vrijednost iz meteo prognoze; podrazumijevana ako je nema."""
     try:
@@ -144,7 +164,9 @@ def _log_res(name, da) -> None:
                  name, da[y].size, step, step * 111.32)
  
  
-def _at(field: np.ndarray, centroid, lats, lons) -> float:
+def _at(field, centroid, lats, lons) -> float:
+    if field is None:
+        return None
     j = int(np.argmin(np.abs(lons - centroid[0])))
     i = int(np.argmin(np.abs(lats - centroid[1])))
     v = field[i, j]
