@@ -1,0 +1,54 @@
+name: Dnevni ciklus
+
+# Pokrece se svaki dan u 05:00 po podgorickom vremenu (03:00 UTC ljeti).
+# Moze se pokrenuti i rucno, dugmetom "Run workflow" na GitHub-u.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  racunaj:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instaliraj biblioteke
+        run: pip install -r requirements.txt
+
+      # Batimetrija se preuzima jednom pa se cuva izmedju pokretanja.
+      - name: Kes batimetrije
+        uses: actions/cache@v4
+        with:
+          path: data/emodnet_bathymetry.tif
+          key: emodnet-bathymetry-v1
+
+      - name: Izracunaj zone
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.CMEMS_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.CMEMS_PASSWORD }}
+        run: python -m panula.build
+
+      # Ako Copernicus zakaze, jucerasnji rezultat ostaje na sajtu
+      # umjesto da se objavi prazna stranica.
+      - name: Provjeri da izlaz postoji
+        run: |
+          test -f public/index.json || { echo "Nema izlaza"; exit 1; }
+          echo "Fajlova: $(ls public | wc -l)"
+
+      - name: Objavi
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          keep_files: true

@@ -1,0 +1,9 @@
+copernicusmarine>=2.0
+xarray>=2024.0
+netCDF4>=1.6
+numpy>=1.26
+scipy>=1.11
+scikit-image>=0.22
+shapely>=2.0
+requests>=2.31
+rasterio>=1.3
