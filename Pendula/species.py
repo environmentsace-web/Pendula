@@ -1,4 +1,4 @@
-""
+"""
 Matrica vrsta: sezonske i temperaturne kapije, tezine prediktora,
 vertikalne preferencije (dubina panule).
  
@@ -32,7 +32,7 @@ class Species:
     ljeto: dict | None = None
  
     def profil(self, month: int) -> dict:
-        """Vrijednosti koje vaze za dati mjesec — jesenja ili ljetnja varijanta."""
+        """Vrijednosti koje vaze za dati mjesec - jesenja ili ljetnja varijanta."""
         osnovni = dict(
             naziv_profila=self.profil_osnovni, months=self.months,
             sst_range=self.sst_range, sst_tolerance=self.sst_tolerance,
@@ -72,7 +72,7 @@ SPECIES: Dict[str, Species] = {
         troll_depth_m=(0.0, 15.0), follows_dcm=False,
         troll_speed_kn=(5.0, 7.0),
         sati="sredina dana, uz plutajuce objekte",
-        napomena="2-5 dana nakon jakih kisa Bojana izbacuje drvene naplavine — "
+        napomena="2-5 dana nakon jakih kisa Bojana izbacuje drvene naplavine - "
                  "to je predvidljiv generator pozicija.",
     ),
     "trupac": Species(
@@ -136,7 +136,7 @@ SPECIES: Dict[str, Species] = {
         troll_depth_m=(15.0, 50.0), follows_dcm=True,
         troll_speed_kn=(1.5, 3.0),
         sati="posljednja tri sata dnevnog svjetla",
-        napomena="Ne lovi se nocu — osim povrsinskim parangalima daleko od "
+        napomena="Ne lovi se nocu - osim povrsinskim parangalima daleko od "
                  "obale. Preko dana bez cvrstog pravila, najcesce pred kraj "
                  "dana.",
         profil_osnovni="duboko, izvan selfa",
@@ -182,7 +182,7 @@ SPECIES: Dict[str, Species] = {
         troll_speed_kn=(3.0, 5.0),
         sati="zora i sumrak",
         napomena="U jesen uz obalu i na usce. Domen modela je more ispred "
-                 "usca i samo usce — ne i rijeka.",
+                 "usca i samo usce - ne i rijeka.",
         profil_osnovni="priobalni",
         ljeto=dict(
             naziv="ljetnji, otvoreno more",
