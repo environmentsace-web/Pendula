@@ -150,7 +150,7 @@ def _explain(comp: np.ndarray, drivers: dict, weights: dict) -> str:
     """
     Zasto je ova zona izdvojena. Gleda SAMO prediktore koje ta vrsta stvarno
     koristi i rangira ih po doprinosu skoru (tezina * srednja vrijednost),
-    a ne po sirovoj vrijednosti — inace jak sloj koji vrsta ignorise
+    a ne po sirovoj vrijednosti - inace jak sloj koji vrsta ignorise
     ispadne kao razlog.
     """
     if not drivers or not weights:
