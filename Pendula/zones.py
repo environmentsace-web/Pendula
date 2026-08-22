@@ -1,30 +1,32 @@
 """
 Skoriranje po celiji i izdvajanje ZONA (poligona), ne tacaka.
-
+ 
 Skor(vrsta, celija, dan) = Sez(mjesec) * Temp(SST) * Vert * SUM(w_i * f_i)
 """
 import numpy as np
 from scipy import ndimage
 from skimage import measure
-
+ 
 from .config import ZONES
 from .species import Species
-
-
+ 
+ 
 # ------------------------------------------------------------------- KAPIJE
 def season_gate(sp: Species, month: int) -> float:
-    return sp.months.get(month, 0.0)
-
-
-def sst_gate(sp: Species, sst: np.ndarray) -> np.ndarray:
+    return sp.profil(month)["months"].get(month, 0.0)
+ 
+ 
+def sst_gate(sp: Species, sst: np.ndarray, month: int | None = None) -> np.ndarray:
     """Trapezoidna kapija: 1 u optimumu, linearno do 0 na granici tolerancije."""
-    lo, hi = sp.sst_range
-    tol = sp.sst_tolerance
+    pr = sp.profil(month) if month is not None else dict(
+        sst_range=sp.sst_range, sst_tolerance=sp.sst_tolerance)
+    lo, hi = pr["sst_range"]
+    tol = pr["sst_tolerance"]
     below = np.clip((sst - (lo - tol)) / tol, 0, 1)
     above = np.clip(((hi + tol) - sst) / tol, 0, 1)
     return np.clip(np.minimum(below, above), 0, 1)
-
-
+ 
+ 
 # ------------------------------------------------------------------ SKORIRANJE
 def score_species(sp: Species, month: int, layers: dict) -> np.ndarray:
     """
@@ -36,22 +38,22 @@ def score_species(sp: Species, month: int, layers: dict) -> np.ndarray:
     if sez <= 0:
         shape = next(iter(layers.values())).shape
         return np.zeros(shape)
-
-    temp = sst_gate(sp, layers["sst"])
+ 
+    temp = sst_gate(sp, layers["sst"], month)
     vert = layers.get("vertical_concentration", 0.7)
-
+ 
     additive = np.zeros_like(temp)
-    for name, w in sp.weights.items():
+    for name, w in sp.profil(month)["weights"].items():
         f = layers.get(name)
         if f is None:
             f = np.full_like(temp, 0.5)
         additive = additive + w * np.clip(f, 0, 1)
-
+ 
     score = sez * temp * vert * additive
     score = np.where(np.isnan(layers["sst"]), np.nan, score)
     return np.clip(score, 0, 1) * 100.0
-
-
+ 
+ 
 # --------------------------------------------------------------- ZONE
 def extract_zones(score: np.ndarray, lats: np.ndarray, lons: np.ndarray,
                   drivers: dict | None = None, weights: dict | None = None) -> list:
@@ -62,36 +64,36 @@ def extract_zones(score: np.ndarray, lats: np.ndarray, lons: np.ndarray,
     valid = np.isfinite(score) & (score > 0)
     if valid.sum() < 20:
         return []
-
+ 
     thr = np.nanpercentile(score[valid], ZONES.percentile)
     if not np.isfinite(thr) or thr <= 0:
         return []
-
+ 
     smooth = ndimage.gaussian_filter(np.nan_to_num(score), ZONES.smooth_sigma)
     smooth[~valid] = 0.0
-
+ 
     mask = smooth >= thr
     mask = ndimage.binary_opening(mask, np.ones((3, 3)))
     mask = ndimage.binary_closing(mask, np.ones((3, 3)))
-
+ 
     labels, n = ndimage.label(mask)
     components = [labels == lab for lab in range(1, n + 1)]
-
+ 
     # Zona od 5000 km2 nije savjet nego karta mora. Prevelike komponente se
     # rekurzivno rasijecaju vecim pragom dok ne padnu ispod max_area_km2.
     components = _split_oversized(components, smooth, lats)
-
+ 
     features = []
     for comp in components:
         area = _area_km2(comp, lats)
         if area < ZONES.min_area_km2:
             continue
-
+ 
         contours = measure.find_contours(comp.astype(float), 0.5)
         if not contours:
             continue
         contour = max(contours, key=len)
-
+ 
         ring = [[float(_interp(lons, c[1])), float(_interp(lats, c[0]))]
                 for c in contour]
         ring = _simplify(ring, ZONES.simplify_deg)
@@ -99,7 +101,7 @@ def extract_zones(score: np.ndarray, lats: np.ndarray, lons: np.ndarray,
             continue
         if ring[0] != ring[-1]:
             ring.append(ring[0])
-
+ 
         vals = score[comp]
         ii, jj = np.where(comp)
         features.append({
@@ -114,17 +116,17 @@ def extract_zones(score: np.ndarray, lats: np.ndarray, lons: np.ndarray,
                 "razlog": _explain(comp, drivers or {}, weights or {}),
             },
         })
-
+ 
     features.sort(key=lambda f: -f["properties"]["score_mean"])
     return features[:ZONES.max_zones_per_species]
-
-
+ 
+ 
 def _split_oversized(components: list, smooth: np.ndarray,
                      lats: np.ndarray, depth: int = 0) -> list:
     """Rasijeca komponente vece od max_area_km2 podizanjem praga na njihov medijan."""
     if depth >= 4:
         return components
-
+ 
     out, changed = [], False
     for comp in components:
         if _area_km2(comp, lats) <= ZONES.max_area_km2:
@@ -140,10 +142,10 @@ def _split_oversized(components: list, smooth: np.ndarray,
             continue
         changed = True
         out.extend(sublabels == i for i in range(1, k + 1))
-
+ 
     return _split_oversized(out, smooth, lats, depth + 1) if changed else out
-
-
+ 
+ 
 def _explain(comp: np.ndarray, drivers: dict, weights: dict) -> str:
     """
     Zasto je ova zona izdvojena. Gleda SAMO prediktore koje ta vrsta stvarno
@@ -185,8 +187,8 @@ def _explain(comp: np.ndarray, drivers: dict, weights: dict) -> str:
         "night": "noc",
     }
     return " + ".join(labels.get(k, k) for k, _ in top)
-
-
+ 
+ 
 def _area_km2(mask: np.ndarray, lats: np.ndarray, res_deg: float = 0.01) -> float:
     dy = res_deg * 111.32
     ii, _ = np.where(mask)
@@ -194,15 +196,15 @@ def _area_km2(mask: np.ndarray, lats: np.ndarray, res_deg: float = 0.01) -> floa
         return 0.0
     dx = dy * np.cos(np.deg2rad(lats[ii]))
     return float(np.sum(dx * dy))
-
-
+ 
+ 
 def _interp(axis: np.ndarray, pos: float) -> float:
     i0 = int(np.floor(pos))
     i1 = min(i0 + 1, len(axis) - 1)
     frac = pos - i0
     return axis[i0] * (1 - frac) + axis[i1] * frac
-
-
+ 
+ 
 def _simplify(ring: list, tol: float) -> list:
     """Douglas-Peucker; shapely ako postoji, inace prorjedjivanje."""
     try:
@@ -214,31 +216,32 @@ def _simplify(ring: list, tol: float) -> list:
     except Exception:
         step = max(1, len(ring) // 60)
         return [[round(p[0], 5), round(p[1], 5)] for p in ring[::step]]
-
-
+ 
+ 
 # ------------------------------------------------------------- UPOZORENJA
 def safety_status(wave_max: float, wind_max_kn: float,
                   gust_max_kn: float, thresholds) -> dict:
     """Tri nivoa. Zone se i dalje racunaju, ali se prikazuju zakljucane."""
     reasons = []
     level = "zeleno"
-
+ 
     if wave_max >= thresholds.wave_red:
         level = "crveno"
         reasons.append(f"talasi do {wave_max:.1f} m")
     elif wave_max >= thresholds.wave_amber:
         level = "zuto"
         reasons.append(f"talasi do {wave_max:.1f} m")
-
+ 
     if wind_max_kn >= thresholds.wind_red or gust_max_kn >= thresholds.gust_red:
         level = "crveno"
         reasons.append(f"vjetar {wind_max_kn:.0f} cv, udari {gust_max_kn:.0f} cv")
     elif wind_max_kn >= thresholds.wind_amber and level == "zeleno":
         level = "zuto"
         reasons.append(f"vjetar {wind_max_kn:.0f} cv")
-
+ 
     return {
         "nivo": level,
         "razlog": ", ".join(reasons) if reasons else "uslovi povoljni",
         "izlazak_preporucen": level != "crveno",
     }
+ 
