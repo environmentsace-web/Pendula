@@ -110,6 +110,15 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
     return index
  
  
+def _res_km(da) -> float:
+    """Stvarni korak mreze u km, umjesto rucno upisane oznake."""
+    names = set(da.dims) | set(da.coords)
+    y = "latitude" if "latitude" in names else "lat"
+    if y in da.coords and da[y].size > 1:
+        return round(float(abs(da[y].values[1] - da[y].values[0])) * 111.32, 1)
+    return None
+ 
+ 
 def _meteo_max(met, field: str, default: float) -> float:
     """Najveca vrijednost iz meteo prognoze; podrazumijevana ako je nema."""
     try:
@@ -142,24 +151,41 @@ def _at(field: np.ndarray, centroid, lats, lons) -> float:
     return None if not np.isfinite(v) else round(float(v), 1)
  
  
+# Podaci se preuzimaju JEDNOM za sva tri dana, ne po danu.
+_BUNDLE: dict = {}
+ 
+ 
 def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
     """Stvarni podaci. Popunjava `sources` radi izvjestaja o svjezini."""
     from . import fetch
  
-    sst_hist = fetch.sst_with_history(today, SST_TENDENCY_LAGS)
-    _log_res("SST", sst_hist)
-    chl, chl_date = fetch.latest_chlorophyll(today)
-    phy = fetch.physics_forecast(today)
-    bgc = fetch.bgc_forecast(today)
-    wav = fetch.waves_forecast(today)
-    met = fetch.meteo(float(np.mean(lats)), float(np.mean(lons)))
-    q = fetch.bojana_discharge()
+    if not _BUNDLE:
+        log.info("Preuzimam podatke jednom za sva %d dana...", FORECAST_DAYS)
+        sst_hist = fetch.sst_with_history(today, SST_TENDENCY_LAGS)
+        _log_res("SST", sst_hist)
+        chl, chl_date = fetch.latest_chlorophyll(today)
+        _BUNDLE.update(
+            sst_hist=sst_hist, chl=chl, chl_date=chl_date,
+            phy=fetch.physics_forecast(today),
+            bgc=fetch.bgc_forecast(today),
+            wav=fetch.waves_forecast(today),
+            met=fetch.meteo(float(np.mean(lats)), float(np.mean(lons))),
+            q=fetch.bojana_discharge(),
+        )
+        log.info("Preuzimanje zavrseno.")
  
-    sources.setdefault("sst", {"datum": str(sst_hist.time.values[-1])[:10],
-                               "rezolucija_km": 1.1})
+    sst_hist = _BUNDLE["sst_hist"]
+    chl, chl_date = _BUNDLE["chl"], _BUNDLE["chl_date"]
+    phy, bgc, wav = _BUNDLE["phy"], _BUNDLE["bgc"], _BUNDLE["wav"]
+    met, q = _BUNDLE["met"], _BUNDLE["q"]
+ 
+    sources.setdefault("sst", {
+        "datum": str(sst_hist.time.values[-1])[:10],
+        "rezolucija_km": _res_km(sst_hist)})
     sources.setdefault("hlorofil", {"datum": chl_date.isoformat(),
                                     "senzor": "OLCI 300 m"})
     sources.setdefault("struje", {"rezolucija_km": 4.2})
+    sources.setdefault("meteo", {"dostupan": met is not None})
  
     sel = dict(time=str(day), method="nearest")
  
