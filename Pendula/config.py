@@ -31,7 +31,7 @@ DATASETS = {
         product="SST_MED_SST_L4_NRT_OBSERVATIONS_010_004",
         must=["sst", "l4"], prefer=["0.01", "uhr", "p1d"],
         avoid=["anomaly", "ssta", "climatology"],
-        variables=["analysed_sst", "adjusted_sea_surface_temperature", "sst"],
+        variables=["analysed_sst"],
     ),
     # Povrsinske struje, 1/24 stepena, 10 dana prognoze
     "currents": dict(
@@ -49,7 +49,7 @@ DATASETS = {
     "temp3d": dict(
         product="MEDSEA_ANALYSISFORECAST_PHY_006_013",
         must=["tem", "p1d"], prefer=["4.2km"], avoid=["p1m", "detided"],
-        variables=["thetao"], max_depth=250.0,
+        variables=["thetao"], max_depth=250.0,   # dataset ima i bottomT
     ),
     # 3D salinitet -> haloklina, pluma Bojane
     "sal3d": dict(
