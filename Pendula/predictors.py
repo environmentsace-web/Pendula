@@ -85,7 +85,8 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
     # pa svaki koristi svoje nivoe.
     z_thermo, thermo_strength = fields.thermocline(theta, theta_levels)
     z_dcm, dcm_ratio = fields.dcm_depth(chl3d, chl_levels)
-    prey_c, prey_t = fields.prey_layer(mld, z_thermo, z_dcm)
+    dcm_deb = fields.dcm_thickness(chl3d, chl_levels)
+    prey_c, prey_t = fields.prey_layer(mld, z_thermo, z_dcm, dcm_deb)
     vconc = fields.vertical_concentration(thermo_strength, prey_t)
     reach = fields.reachability(prey_c, prey_t, MAX_TROLL_DEPTH)
  
@@ -102,16 +103,23 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
     ones = np.ones_like(sst)
     moon = moon_illumination(date)
  
+    # Promjena temperature povrsine — prostorna i vremenska, obje mjerene
+    # prema apsolutnom pragu od 0.5 C, ne prema ostatku domena.
+    raspon = fields.sst_local_range(sst, lats, res_deg, window_km=3.0)
+    prelaz = fields.prelazi_prag(raspon)
+    tend_prag = fields.prelazi_prag(tend3 * 3.0)   # ukupna promjena za 3 dana
+ 
     predictors = {
         # kapije
         "sst": sst,
         "vertical_concentration": vgate,
  
-        # termalni
-        "sst_front": _norm(grad),
-        "sst_warming": _norm(np.clip(tend3, 0, None)),
-        "sst_cooling": _norm(np.clip(-tend3, 0, None)),
-        "sst_trend_7d": _norm(np.abs(tend7)),
+        # termalni — front je sada jaci od 0.5 C na 3 km, a ne "jaci od ostalih"
+        "sst_front": np.fmax(prelaz, 0.6 * tend_prag),
+        "sst_raspon_C": raspon,
+        "sst_warming": fields.prelazi_prag(np.clip(tend3, 0, None) * 3.0),
+        "sst_cooling": fields.prelazi_prag(np.clip(-tend3, 0, None) * 3.0),
+        "sst_promjena_3d_C": tend3 * 3.0,
  
         # produktivnost
         "chl_gradient": _norm(chl_grad),
@@ -145,7 +153,8 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
  
     vertical = dict(
         termoklina_m=_med(z_thermo), termoklina_C_po_m=_med(thermo_strength),
-        dcm_m=_med(z_dcm), dcm_odnos=_med(dcm_ratio), mld_m=_med(mld),
+        dcm_m=_med(z_dcm), dcm_odnos=_med(dcm_ratio),
+        dcm_debljina_m=_med(dcm_deb), mld_m=_med(mld),
         sloj_plijena_m=[_med(prey_c - prey_t / 2), _med(prey_c + prey_t / 2)],
         dohvatljivost=_med(reach), prey_center=prey_c,
     )
@@ -158,15 +167,24 @@ def depth_band_for(sp: Species, depth: np.ndarray) -> np.ndarray:
  
  
 def vertical_note(v: dict) -> str:
-    """Rečenica koja korisniku objašnjava vertikalnu situaciju."""
+    """Objasnjenje vertikalne situacije, sa lancem ishrane koji stoji iza nje."""
     zt, zd, r = v["termoklina_m"], v["dcm_m"], v["dohvatljivost"]
+ 
+    lanac = ""
+    if zd is not None:
+        deb = v.get("dcm_debljina_m")
+        raspon = f" (sloj debljine {deb:.0f} m)" if deb else ""
+        lanac = (f" Najveća gustina hlorofila je na {zd:.0f} m{raspon} — tu se "
+                 f"skuplja sitna riba koja se hrani planktonom, pa je i najveća "
+                 f"vjerovatnoća da su grabljivice tu negdje.")
+ 
     if zt is None:
-        return "Vodeni stub izmiješan — plijen razvučen, uspješnost niža."
+        return ("Vodeni stub izmiješan — plijen razvučen po dubini, "
+                "koncentracije slabije." + lanac)
     if r is not None and r < 0.35:
-        return (f"Termoklina na {zt:.0f} m, sloj plijena oko {zd or zt:.0f} m — "
-                f"ispod dohvata panule od {MAX_TROLL_DEPTH:.0f} m.")
-    return (f"Termoklina na {zt:.0f} m drži plijen stisnut"
-            + (f", dubinski maksimum hlorofila na {zd:.0f} m." if zd else "."))
+        return (f"Termoklina na {zt:.0f} m. Sloj plijena leži pretežno ispod "
+                f"{MAX_TROLL_DEPTH:.0f} m, dakle izvan dohvata panule." + lanac)
+    return (f"Termoklina na {zt:.0f} m drži plijen stisnut u uzak sloj." + lanac)
  
  
 def _med(a):
