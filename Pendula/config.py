@@ -5,9 +5,9 @@ Potez Petrovac -> Ada Bojana (more ispred usca Bojane i samo usce, bez rijeke).
 from dataclasses import dataclass, field
  
 # ---------------------------------------------------------------- DOMEN
-# Petrovac ~42.205N 18.945E ; usce Bojane ~41.85N 19.35E
+# Lustica (rt Ostro) ~42.40N 18.53E ; usce Bojane ~41.85N 19.35E
 # Zapadna/juzna granica gura domen preko ivice selfa ka Juznojadranskoj kotlini.
-BBOX = dict(lon_min=18.60, lon_max=19.50, lat_min=41.60, lat_max=42.30)
+BBOX = dict(lon_min=18.45, lon_max=19.50, lat_min=41.60, lat_max=42.45)
  
 # Analiticka mreza = nativna mreza satelitskog SST-a (0.01 deg ~ 1.1 km lat)
 GRID_RES = 0.01
@@ -139,8 +139,8 @@ STATIC_VARS = [
  
 # Poznate strukture (seke, olupine, rtovi) — dopunjavati iz iskustva
 STRUCTURES = [
-    dict(name="Katic", lat=42.098, lon=18.930),
     dict(name="Platamuni", lat=42.243, lon=18.719),
+    dict(name="Katic", lat=42.098, lon=18.930),
     dict(name="Rt Volujica", lat=42.083, lon=19.083),
     dict(name="Stari Ulcinj / Mendra", lat=41.916, lon=19.196),
     dict(name="Usce Bojane", lat=41.852, lon=19.353),
