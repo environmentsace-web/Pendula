@@ -29,7 +29,7 @@ DATASETS = {
     # Satelitski SST, L4 gap-free, 0.01 stepen, dnevno (CNR-GOS)
     "sst_sat": dict(
         product="SST_MED_SST_L4_NRT_OBSERVATIONS_010_004",
-        must=["sst", "l4"], prefer=["0.01", "uhr", "p1d"],
+        must=["sst", "l4"], prefer=["0.01", "uhr", "_c_"],
         avoid=["anomaly", "ssta", "climatology"],
         variables=["analysed_sst"],
     ),
