@@ -63,7 +63,7 @@ def _subset_safe(key, start, end, **kw):
     except Exception as e:
         msg = str(e).lower()
         if "depth" in msg:
-            log.warning("Dubina ne odgovara (%s) — pokusavam bez nje", e)
+            log.warning("Dubina ne odgovara (%s) - pokusavam bez nje", e)
             kw.pop("maximum_depth", None)
             saved = DATASETS[key].pop("max_depth", None)
             try:
@@ -73,7 +73,7 @@ def _subset_safe(key, start, end, **kw):
                     DATASETS[key]["max_depth"] = saved
         if "variable" not in msg:
             raise
-        log.warning("Imena varijabli ne odgovaraju (%s) — skidam sve", e)
+        log.warning("Imena varijabli ne odgovaraju (%s) - skidam sve", e)
         spec = DATASETS[key]
         saved = spec["variables"]
         spec["variables"] = None
@@ -102,7 +102,7 @@ def pick(ds, *candidates):
 def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
                        min_coverage: float = 0.35) -> tuple[xr.DataArray, dt.date]:
     """
-    Hlorofil objavljen na najskorijem datumu — trazi unazad dok ne nadje
+    Hlorofil objavljen na najskorijem datumu - trazi unazad dok ne nadje
     snimak sa dovoljnim pokrivanjem domena (oblaci prave rupe u L3 OLCI).
     Ako ni jedan dan ne prodje prag, pada na L4 gap-free 1 km.
     """
@@ -119,7 +119,7 @@ def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
             log.info("Hlorofil OLCI 300 m, %s, pokrivanje %.0f%%",
                      day, coverage * 100)
             return chl, day
-        log.info("OLCI %s pokrivanje samo %.0f%% — trazim dalje",
+        log.info("OLCI %s pokrivanje samo %.0f%% - trazim dalje",
                  day, coverage * 100)
  
     log.warning("Prelazim na L4 gap-free (interpolirano)")
@@ -144,7 +144,7 @@ def sst_with_history(today: dt.date, lags=(3, 7)):
  
  
 def physics_forecast(today: dt.date):
-    """Struje, MLD, 3D temperatura i salinitet — danas + prognoza."""
+    """Struje, MLD, 3D temperatura i salinitet - danas + prognoza."""
     end = today + dt.timedelta(days=FORECAST_DAYS)
     return {
         "currents": _subset_safe("currents", today, end),
@@ -187,7 +187,7 @@ def _get_json(url: str, params: dict, tries: int = 3,
  
  
 def meteo(lat: float, lon: float) -> dict | None:
-    """Vjetar, udari, pritisak, padavine — Open-Meteo, bez kljuca."""
+    """Vjetar, udari, pritisak, padavine - Open-Meteo, bez kljuca."""
     out = _get_json(OPEN_METEO_FORECAST, {
         "latitude": lat, "longitude": lon,
         "hourly": "wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
@@ -198,7 +198,7 @@ def meteo(lat: float, lon: float) -> dict | None:
         "timezone": "Europe/Podgorica",
     })
     if out is None:
-        log.warning("Meteo nedostupan — upozorenja se racunaju samo iz talasa")
+        log.warning("Meteo nedostupan - upozorenja se racunaju samo iz talasa")
     return out
  
  
