@@ -22,8 +22,6 @@ jobs:
         with:
           python-version: "3.12"
  
-      # Fajlovi mogu biti u korijenu ili u podfolderu, zavisno kako su
-      # prevuceni. Ovaj korak sam pronalazi gdje su i javlja to ostalima.
       # Fajlovi mogu zavrsiti u korijenu ili u podfolderu, zavisno kako su
       # prevuceni. Trazimo build.py i iz njega izvodimo sve putanje.
       - name: Nadji kod
