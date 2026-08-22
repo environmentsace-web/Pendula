@@ -1,5 +1,5 @@
 """
-Batimetrija se preuzima automatski — korisnik ne dira nijedan fajl.
+Batimetrija se preuzima automatski - korisnik ne dira nijedan fajl.
  
 Izvor: EMODnet Bathymetry WCS (otvoren servis, bez registracije).
 Preuzima se jednom i kesira; dno se ne mijenja, pa nema razloga za ponavljanje.
@@ -92,7 +92,7 @@ def to_grid(lats: np.ndarray, lons: np.ndarray, force: bool = False):
     # Najdublja tacka u domenu je oko 1300 m; sve preko toga je greska.
     sumnjivo = depth > 2000
     if sumnjivo.any():
-        log.warning("Odbacujem %d celija sa dubinom preko 2000 m — "
+        log.warning("Odbacujem %d celija sa dubinom preko 2000 m - "
                     "vjerovatno oznaka za nedostatak podatka", int(sumnjivo.sum()))
         depth[sumnjivo] = np.nan
  
