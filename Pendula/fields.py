@@ -63,6 +63,41 @@ def sst_local_range(sst: np.ndarray, lat: np.ndarray, res_deg: float,
     return raspon
  
  
+def hladno_jezgro(sto: np.ndarray, lat: np.ndarray, res_deg: float,
+                  radius_km: float = 8.0) -> np.ndarray:
+    """
+    Koliko je celija hladnija od svoje okoline, u stepenima.
+ 
+    Pozitivno znaci hladnije od okolnog mora. Front je granica dvije vodene
+    mase i ide u oba smjera; upwelling je hladno JEZGRO usred toplije vode,
+    pa se prepoznaje samo po negativnom odstupanju.
+    """
+    dx_km, _ = cell_size_km(lat, res_deg)
+    k = max(1, int(round(radius_km / float(np.mean(dx_km)))))
+ 
+    popuna = np.where(np.isnan(sto), np.nanmean(sto), sto)
+    okolina = ndimage.uniform_filter(popuna, size=2 * k + 1)
+    odstupanje = okolina - popuna
+    odstupanje[np.isnan(sto)] = np.nan
+    return odstupanje
+ 
+ 
+def upwelling(sst: np.ndarray, chl: np.ndarray, lat: np.ndarray,
+              res_deg: float, prag: float = SST_PRAG) -> np.ndarray:
+    """
+    Indeks izdizanja dubinske vode, 0..1.
+ 
+    Trazi se poklapanje dva traga: povrsina hladnija od okoline za bar `prag`
+    stepeni, i hlorofil visi nego okolo. Sama hladna mrlja moze biti i ostatak
+    nocnog hladjenja; tek uz povecanu produktivnost govori o dotoku nutrijenata
+    iz dubine. Mnoze se, pa oba traga moraju postojati.
+    """
+    hladnoca = np.clip(hladno_jezgro(sst, lat, res_deg) / prag, 0, 2) / 2
+    log_chl = np.log10(np.clip(chl, 0.01, None))
+    obogacenje = np.clip(-hladno_jezgro(log_chl, lat, res_deg) / 0.15, 0, 1)
+    return np.sqrt(np.clip(hladnoca, 0, 1) * obogacenje)
+ 
+ 
 def prelazi_prag(promjena: np.ndarray, prag: float = SST_PRAG) -> np.ndarray:
     """
     Skala vezana za APSOLUTNI prag umjesto za percentile domena.
@@ -94,34 +129,47 @@ def sst_tendency(sst_now: np.ndarray, sst_past: np.ndarray, days: int) -> np.nda
  
  
 # ------------------------------------------------------------- VERTIKALNI MODUL
-def thermocline(theta: np.ndarray, depth: np.ndarray, od_dubine: float = 10.0):
+def thermocline(theta: np.ndarray, depth: np.ndarray,
+                mld: np.ndarray | None = None, od_dubine: float = 10.0,
+                do_dubine: float = 90.0, prag_grad: float = 0.05):
     """
-    Iz profila potencijalne temperature izvlaci dubinu i jacinu termokline.
+    Dubina i jacina sezonske termokline iz profila potencijalne temperature.
  
     theta: [depth, lat, lon]; depth: [depth] u metrima (rastuce).
-    Vraca (dubina_m, jacina_C_po_m) — dubina maksimalnog vertikalnog gradijenta.
  
-    Prvih `od_dubine` metara se preskace. Ljeti se povrsina danju zagrije pa
-    najjaci gradijent u profilu zna ispasti na dva-tri metra, sto je dnevna
-    pojava koja nestane preko noci — a ne sezonska termoklina koja drzi plijen.
+    Ljeti vodeni stub cesto ima dvije termokline: ostru i tanku na bazi dnevno
+    zagrijanog povrsinskog sloja, i sezonsku dublje. Tanka je obicno JACA, pa
+    trazenje najjaceg gradijenta pogresno vraca nju — a plijen drzi sezonska.
+ 
+    Zato se ne trazi najjaci nego NAJDUBLJI izrazen gradijent unutar pojasa
+    koji je za panulu uopste relevantan. "Izrazen" znaci lokalni maksimum
+    jaci od `prag_grad` (C/m). Dubina mijesanog sloja, kad je ima, pomjera
+    donju granicu trazenja ispod povrsinskog sloja.
     """
     dtheta = np.diff(theta, axis=0)
     ddepth = np.diff(depth)[:, None, None]
     grad = np.abs(dtheta / ddepth)                      # C/m po sloju
+    mid = 0.5 * (depth[:-1] + depth[1:])
  
-    mid_depth = 0.5 * (depth[:-1] + depth[1:])
-    grad = np.where((mid_depth < od_dubine)[:, None, None], np.nan, grad)
+    donja = (np.fmax(np.nan_to_num(mld, nan=od_dubine) * 0.9, od_dubine)
+             if mld is not None else np.full(theta.shape[1:], od_dubine))
+    pojas = ((mid[:, None, None] >= donja[None, :, :]) &
+             (mid[:, None, None] <= do_dubine))
  
-    idx = np.nanargmax(np.nan_to_num(grad, nan=-1), axis=0)
+    g = np.where(pojas, np.nan_to_num(grad, nan=0.0), -1.0)
  
-    zt = mid_depth[idx]
-    strength = np.take_along_axis(grad, idx[None, :, :], axis=0)[0]
+    # lokalni maksimumi po dubini
+    lijevo = np.vstack([g[:1], g[:-1]])
+    desno = np.vstack([g[1:], g[-1:]])
+    vrh = (g >= lijevo) & (g >= desno) & (g >= prag_grad)
  
-    # Gdje nema stratifikacije (izmijesan stub) termoklina nema smisla
-    weak = strength < 0.02                              # C/m
-    zt = np.where(weak, np.nan, zt)
-    strength = np.where(weak, 0.0, strength)
-    return zt, strength
+    # najdublji takav vrh
+    ima = vrh.any(axis=0)
+    idx = (len(mid) - 1) - np.argmax(vrh[::-1], axis=0)
+ 
+    zt = np.where(ima, mid[idx], np.nan)
+    jac = np.where(ima, np.take_along_axis(g, idx[None], axis=0)[0], 0.0)
+    return zt, np.clip(jac, 0, None)
  
  
 def dcm_depth(chl: np.ndarray, depth: np.ndarray, min_ratio: float = 1.3):
