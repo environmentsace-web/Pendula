@@ -1,7 +1,7 @@
 name: Dnevni ciklus
  
 # Pokrece se svaki dan u 05:00 po podgorickom vremenu (03:00 UTC ljeti).
-# Moze se pokrenuti i rucno, dugmetom "Run workflow" na GitHub-u.
+# Moze se pokrenuti i rucno, dugmetom "Run workflow".
 on:
   schedule:
     - cron: "0 3 * * *"
@@ -21,27 +21,49 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+ 
+      # Fajlovi mogu biti u korijenu ili u podfolderu, zavisno kako su
+      # prevuceni. Ovaj korak sam pronalazi gdje su i javlja to ostalima.
+      - name: Nadji korijen projekta
+        id: korijen
+        run: |
+          if [ -f requirements.txt ]; then
+            D="."
+          else
+            F=$(find . -maxdepth 3 -name requirements.txt -not -path "*/.*" | head -1)
+            if [ -z "$F" ]; then
+              echo "Nigdje ne nalazim requirements.txt."
+              ls -R . | head -50
+              exit 1
+            fi
+            D=$(dirname "$F")
+          fi
+          echo "dir=$D" >> $GITHUB_OUTPUT
+          echo "Korijen projekta: $D"
+          ls "$D"
  
       - name: Instaliraj biblioteke
+        working-directory: ${{ steps.korijen.outputs.dir }}
         run: pip install -r requirements.txt
  
       # Batimetrija se preuzima jednom pa se cuva izmedju pokretanja.
       - name: Kes batimetrije
         uses: actions/cache@v4
         with:
-          path: data/emodnet_bathymetry.tif
+          path: |
+            data/emodnet_bathymetry.tif
+            ${{ steps.korijen.outputs.dir }}/data/emodnet_bathymetry.tif
           key: emodnet-bathymetry-v1
  
       - name: Izracunaj zone
+        working-directory: ${{ steps.korijen.outputs.dir }}
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.CMEMS_USERNAME }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.CMEMS_PASSWORD }}
         run: python -m panula.build
  
-      # Ako Copernicus zakaze, jucerasnji rezultat ostaje na sajtu
-      # umjesto da se objavi prazna stranica.
       - name: Provjeri da izlaz postoji
+        working-directory: ${{ steps.korijen.outputs.dir }}
         run: |
           test -f public/index.json || { echo "Nema izlaza"; exit 1; }
           echo "Fajlova: $(ls public | wc -l)"
@@ -50,5 +72,6 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          keep_files: true 
+          publish_dir: ${{ steps.korijen.outputs.dir }}/public
+          keep_files: true
+ 
