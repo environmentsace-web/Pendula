@@ -1,8 +1,8 @@
 """
-Staticki slojevi — racunaju se jednom iz batimetrije i kesiraju.
+Staticki slojevi - racunaju se jednom iz batimetrije i kesiraju.
  
 Batimetrija: EMODnet Bathymetry (bolja uz obalu) ili GEBCO 2024 kao rezerva.
-Fajl se skida rucno jednom i stavlja u data/bathymetry.nc — nema smisla
+Fajl se skida rucno jednom i stavlja u data/bathymetry.nc - nema smisla
 preuzimati ga svaki dan jer se dno ne mijenja.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ EARTH_R = 6371.0
  
  
 def analysis_grid():
-    """Nativna mreza analize — ista kao satelitski SST (0.01 stepen)."""
+    """Nativna mreza analize - ista kao satelitski SST (0.01 stepen)."""
     lats = np.arange(BBOX["lat_min"], BBOX["lat_max"], GRID_RES)
     lons = np.arange(BBOX["lon_min"], BBOX["lon_max"], GRID_RES)
     return lats, lons
@@ -59,7 +59,7 @@ def koridor(lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
     lustica = strana(42.400, 18.530)      # rt Ostro, ulaz u Boku
     bojana = strana(41.852, 19.353)
     boka = (LAT > 42.38) & (LON > 18.60)    # unutrasnjost zaliva
-    # Skadarsko jezero — slatka voda. Dvije oblasti jer se jezero prema
+    # Skadarsko jezero - slatka voda. Dvije oblasti jer se jezero prema
     # sjeverozapadu (Virpazar) priblizava mestima gdje je more jos zapadnije.
     skadar = ((LAT > 42.02) & (LON > 19.15)) | ((LAT > 42.15) & (LON > 19.00))
     return (lustica > 0) & (bojana < 0) & ~boka & ~skadar
@@ -141,7 +141,7 @@ def izobate(depth: np.ndarray, lats: np.ndarray, lons: np.ndarray,
     """
     Linije jednakih dubina kao GeoJSON.
  
-    Korak od 20 m do 100 m — tu se panula vodi i tu dubina nesto znaci.
+    Korak od 20 m do 100 m - tu se panula vodi i tu dubina nesto znaci.
     Dublje na svakih 50 m, samo radi orijentacije prema ivici selfa.
     """
     from skimage import measure
