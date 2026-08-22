@@ -54,8 +54,12 @@ jobs:
             [ -n "$R" ] && cp "$R" "$D/requirements.txt"
           fi
  
+          PKGNAME=$(basename "$PKG")
+ 
           echo "dir=$D" >> $GITHUB_OUTPUT
+          echo "pkg=$PKGNAME" >> $GITHUB_OUTPUT
           echo "Kod je u: $PKG"
+          echo "Ime paketa: $PKGNAME"
           echo "Pokrecem iz: $D"
  
       - name: Instaliraj biblioteke
@@ -76,7 +80,10 @@ jobs:
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.CMEMS_USERNAME }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.CMEMS_PASSWORD }}
-        run: python -m panula.build
+        run: |
+          echo "Radni folder: $(pwd)"
+          ls -la
+          PYTHONPATH=. python -m ${{ steps.korijen.outputs.pkg }}.build
  
       - name: Provjeri da izlaz postoji
         working-directory: ${{ steps.korijen.outputs.dir }}
@@ -90,3 +97,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ${{ steps.korijen.outputs.dir }}/public
           keep_files: true
+          
