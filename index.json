@@ -1,5 +1,5 @@
 {
-  "generisano": "2026-08-22T14:42:40Z",
+  "generisano": "2026-08-22T14:59:21Z",
   "domen": {
     "lon": [
       18.6,
@@ -29,7 +29,7 @@
   "izvori": {
     "sst": {
       "datum": "2026-08-22",
-      "rezolucija_km": 1.1
+      "rezolucija_km": 0.9
     },
     "hlorofil": {
       "datum": "2026-08-21",
@@ -37,6 +37,9 @@
     },
     "struje": {
       "rezolucija_km": 4.2
+    },
+    "meteo": {
+      "dostupan": true
     }
   },
   "fajlovi": [
