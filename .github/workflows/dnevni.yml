@@ -16,31 +16,47 @@ jobs:
     timeout-minutes: 45
  
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
  
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
  
       # Fajlovi mogu biti u korijenu ili u podfolderu, zavisno kako su
       # prevuceni. Ovaj korak sam pronalazi gdje su i javlja to ostalima.
-      - name: Nadji korijen projekta
+      # Fajlovi mogu zavrsiti u korijenu ili u podfolderu, zavisno kako su
+      # prevuceni. Trazimo build.py i iz njega izvodimo sve putanje.
+      - name: Nadji kod
         id: korijen
         run: |
-          if [ -f requirements.txt ]; then
-            D="."
-          else
-            F=$(find . -maxdepth 3 -name requirements.txt -not -path "*/.*" | head -1)
-            if [ -z "$F" ]; then
-              echo "Nigdje ne nalazim requirements.txt."
-              ls -R . | head -50
-              exit 1
-            fi
-            D=$(dirname "$F")
+          echo "--- sadrzaj repozitorijuma ---"
+          find . -name "*.py" -not -path "./.git/*" | sort
+          echo "------------------------------"
+ 
+          F=$(find . -name build.py -not -path "./.git/*" | head -1)
+          if [ -z "$F" ]; then
+            echo "GRESKA: nigdje ne nalazim build.py."
+            echo "Provjeri da je folder panula sa svih devet fajlova ucitan."
+            exit 1
           fi
+ 
+          PKG=$(dirname "$F")     # folder sa kodom, npr. ./panula
+          D=$(dirname "$PKG")     # nivo iznad, odatle se pokrece
+ 
+          # Prazan __init__.py se pri prevlacenju cesto izgubi; pravimo ga.
+          if [ ! -f "$PKG/__init__.py" ]; then
+            echo "Nedostaje __init__.py — pravim ga."
+            touch "$PKG/__init__.py"
+          fi
+ 
+          if [ ! -f "$D/requirements.txt" ]; then
+            R=$(find . -name requirements.txt -not -path "./.git/*" | head -1)
+            [ -n "$R" ] && cp "$R" "$D/requirements.txt"
+          fi
+ 
           echo "dir=$D" >> $GITHUB_OUTPUT
-          echo "Korijen projekta: $D"
-          ls "$D"
+          echo "Kod je u: $PKG"
+          echo "Pokrecem iz: $D"
  
       - name: Instaliraj biblioteke
         working-directory: ${{ steps.korijen.outputs.dir }}
@@ -48,7 +64,7 @@ jobs:
  
       # Batimetrija se preuzima jednom pa se cuva izmedju pokretanja.
       - name: Kes batimetrije
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             data/emodnet_bathymetry.tif
@@ -74,4 +90,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ${{ steps.korijen.outputs.dir }}/public
           keep_files: true
- 
