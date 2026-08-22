@@ -121,6 +121,7 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
                         "dubina_m": [pr["troll_depth_m"][0],
                                      min(pr["troll_depth_m"][1], MAX_TROLL_DEPTH)],
                         "brzina_kn": list(pr["troll_speed_kn"]),
+                        "sati": pr.get("sati"),
                         "granica_dubine_m": MAX_TROLL_DEPTH,
                     },
                     "vertikala": {k: v for k, v in vert.items()
