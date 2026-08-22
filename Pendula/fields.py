@@ -94,19 +94,25 @@ def sst_tendency(sst_now: np.ndarray, sst_past: np.ndarray, days: int) -> np.nda
  
  
 # ------------------------------------------------------------- VERTIKALNI MODUL
-def thermocline(theta: np.ndarray, depth: np.ndarray):
+def thermocline(theta: np.ndarray, depth: np.ndarray, od_dubine: float = 10.0):
     """
     Iz profila potencijalne temperature izvlaci dubinu i jacinu termokline.
  
     theta: [depth, lat, lon]; depth: [depth] u metrima (rastuce).
     Vraca (dubina_m, jacina_C_po_m) — dubina maksimalnog vertikalnog gradijenta.
+ 
+    Prvih `od_dubine` metara se preskace. Ljeti se povrsina danju zagrije pa
+    najjaci gradijent u profilu zna ispasti na dva-tri metra, sto je dnevna
+    pojava koja nestane preko noci — a ne sezonska termoklina koja drzi plijen.
     """
     dtheta = np.diff(theta, axis=0)
     ddepth = np.diff(depth)[:, None, None]
     grad = np.abs(dtheta / ddepth)                      # C/m po sloju
  
-    idx = np.nanargmax(np.nan_to_num(grad, nan=-1), axis=0)
     mid_depth = 0.5 * (depth[:-1] + depth[1:])
+    grad = np.where((mid_depth < od_dubine)[:, None, None], np.nan, grad)
+ 
+    idx = np.nanargmax(np.nan_to_num(grad, nan=-1), axis=0)
  
     zt = mid_depth[idx]
     strength = np.take_along_axis(grad, idx[None, :, :], axis=0)[0]
