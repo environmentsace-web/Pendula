@@ -83,7 +83,7 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
     # --- vertikala
     # Fizicki i biogeohemijski model imaju razlicite vertikalne mreze,
     # pa svaki koristi svoje nivoe.
-    z_thermo, thermo_strength = fields.thermocline(theta, theta_levels)
+    z_thermo, thermo_strength = fields.thermocline(theta, theta_levels, mld=mld)
     z_dcm, dcm_ratio = fields.dcm_depth(chl3d, chl_levels)
     dcm_deb = fields.dcm_thickness(chl3d, chl_levels)
     prey_c, prey_t = fields.prey_layer(mld, z_thermo, z_dcm, dcm_deb)
@@ -95,7 +95,12 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
  
     chl_grad = fields.sst_gradient(np.log10(np.clip(chl_surf, 0.01, None)),
                                    lats, res_deg)
-    forage = fields.forage_index(chl_surf, chl_grad, vgate)
+    upw = fields.upwelling(sst, chl_surf, lats, res_deg)
+ 
+    # Izdizanje dubinske vode dize produktivnost, pa ulazi kroz mamac.
+    # Tezine po vrstama se ne diraju.
+    forage = np.clip(fields.forage_index(chl_surf, chl_grad, vgate)
+                     + 0.25 * upw, 0, 1)
     plume = fields.bojana_plume(salinity)
     shear = fields.current_shear(u, v, lats, res_deg)
     speed = np.hypot(u, v)
@@ -120,6 +125,8 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         "sst_warming": fields.prelazi_prag(np.clip(tend3, 0, None) * 3.0),
         "sst_cooling": fields.prelazi_prag(np.clip(-tend3, 0, None) * 3.0),
         "sst_promjena_3d_C": tend3 * 3.0,
+        "upwelling": upw,
+        "hladnije_od_okoline_C": fields.hladno_jezgro(sst, lats, res_deg),
  
         # produktivnost
         "chl_gradient": _norm(chl_grad),
