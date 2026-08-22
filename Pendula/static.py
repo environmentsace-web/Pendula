@@ -45,6 +45,7 @@ def koridor(lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
       - linija kroz vrh Lustice  -> sve sjeverozapadno od nje otpada
       - linija kroz usce Bojane  -> sve jugoistocno od nje otpada
       - unutrasnjost Boke        -> zaliv, nije teren za panulu
+      - Skadarsko jezero         -> slatka voda, nije more
     Obje linije idu pod 225 stepeni, sto prati pruzanje obale.
     Budva, Platamuni i Katic ostaju u domenu; dubina prema jugozapadu takodje.
     """
@@ -57,8 +58,11 @@ def koridor(lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
  
     lustica = strana(42.400, 18.530)      # rt Ostro, ulaz u Boku
     bojana = strana(41.852, 19.353)
-    boka = (LAT > 42.38) & (LON > 18.60)  # unutrasnjost zaliva
-    return (lustica > 0) & (bojana < 0) & ~boka
+    boka = (LAT > 42.38) & (LON > 18.60)    # unutrasnjost zaliva
+    # Skadarsko jezero — slatka voda. Dvije oblasti jer se jezero prema
+    # sjeverozapadu (Virpazar) priblizava mestima gdje je more jos zapadnije.
+    skadar = ((LAT > 42.02) & (LON > 19.15)) | ((LAT > 42.15) & (LON > 19.00))
+    return (lustica > 0) & (bojana < 0) & ~boka & ~skadar
  
  
 def _cell_km(lats):
@@ -114,6 +118,7 @@ def distance_to_coast(depth: np.ndarray, lats: np.ndarray) -> np.ndarray:
  
  
 IZOBATE_PARAMS = dict(plitko_korak=20.0, plitko_do=100.0, duboko_korak=50.0)
+IZOBATE_VERZIJA = 2   # sjecenje koridorom umjesto maskirane batimetrije
  
  
 def izobate_potpis() -> str:
@@ -125,11 +130,12 @@ def izobate_potpis() -> str:
     izobate racunaju jednom i poslije samo stoje.
     """
     import hashlib
-    osnov = f"{IZOBATE_PARAMS}|{BBOX}|{GRID_RES}"
+    osnov = f"{IZOBATE_PARAMS}|v{IZOBATE_VERZIJA}|{BBOX}|{GRID_RES}"
     return hashlib.md5(osnov.encode()).hexdigest()[:10]
  
  
 def izobate(depth: np.ndarray, lats: np.ndarray, lons: np.ndarray,
+            maska: np.ndarray | None = None,
             plitko_korak: float = 20.0, plitko_do: float = 100.0,
             duboko_korak: float = 50.0, min_tacaka: int = 8) -> dict:
     """
@@ -148,20 +154,43 @@ def izobate(depth: np.ndarray, lats: np.ndarray, lons: np.ndarray,
     feats = []
     for z in nivoi:
         for c in measure.find_contours(popuna, float(z)):
-            if len(c) < min_tacaka:
-                continue
-            linija = [[round(float(_interp1(lons, t[1])), 4),
-                       round(float(_interp1(lats, t[0])), 4)] for t in c]
-            linija = _prorijedi(linija, 0.0035)
-            if len(linija) < 4:
-                continue
-            feats.append({
-                "type": "Feature",
-                "geometry": {"type": "LineString", "coordinates": linija},
-                "properties": {"dubina_m": int(z),
-                               "glavna": int(z) in (100, 200) or int(z) % 500 == 0},
-            })
+            # Kontura se crta iz PUNE batimetrije, pa se tek onda sijece
+            # koridorom. Da se crta iz maskirane, linija bi pratila i
+            # vjestacki rez i izgledala kao izobata preko kopna.
+            for dio in _sijeci(c, maska):
+                if len(dio) < min_tacaka:
+                    continue
+                linija = [[round(float(_interp1(lons, t[1])), 4),
+                           round(float(_interp1(lats, t[0])), 4)] for t in dio]
+                linija = _prorijedi(linija, 0.0035)
+                if len(linija) < 4:
+                    continue
+                feats.append({
+                    "type": "Feature",
+                    "geometry": {"type": "LineString", "coordinates": linija},
+                    "properties": {"dubina_m": int(z),
+                                   "glavna": int(z) in (100, 200) or int(z) % 500 == 0},
+                })
     return {"type": "FeatureCollection", "features": feats}
+ 
+ 
+def _sijeci(kontura: np.ndarray, maska: np.ndarray | None) -> list:
+    """Zadrzava samo dijelove konture koji leze unutar maske."""
+    if maska is None:
+        return [kontura]
+    ii = np.clip(np.round(kontura[:, 0]).astype(int), 0, maska.shape[0] - 1)
+    jj = np.clip(np.round(kontura[:, 1]).astype(int), 0, maska.shape[1] - 1)
+    unutra = maska[ii, jj]
+ 
+    dijelovi, tek = [], []
+    for tacka, u in zip(kontura, unutra):
+        if u:
+            tek.append(tacka)
+        elif tek:
+            dijelovi.append(np.array(tek)); tek = []
+    if tek:
+        dijelovi.append(np.array(tek))
+    return dijelovi
  
  
 def _interp1(osa: np.ndarray, poz: float) -> float:
@@ -191,10 +220,12 @@ def build() -> dict:
         ds = xr.open_dataset(cache)
         return {v: ds[v].values for v in ds.data_vars}
  
-    depth = load_bathymetry()
+    depth_raw = load_bathymetry()
+    depth = depth_raw.copy()
     depth[~koridor(lats, lons)] = np.nan
     layers = {
         "depth": depth,
+        "depth_raw": depth_raw,
         "slope": slope_deg(depth, lats),
         "dist_shelf_edge": distance_to_isobath(depth, lats, 200.0),
         "dist_structure": distance_to_points(STRUCTURES, lats, lons),
@@ -224,10 +255,12 @@ def synthetic(seed: int = 0) -> dict:
         2600 * ((42.30 - LAT) * 0.35 + (19.50 - LON) * 1.25) - 250, 2, 1400)
     depth[(LAT > 42.16) & (LON < 18.86)] = np.nan     # kopno SZ
     depth[(LAT > 42.02) & (LON > 19.30)] = np.nan     # kopno IZ
+    depth_raw = depth.copy()
     depth[~koridor(lats, lons)] = np.nan              # van poteza
  
     return {
         "depth": depth,
+        "depth_raw": depth_raw,
         "slope": slope_deg(depth, lats),
         "dist_shelf_edge": distance_to_isobath(depth, lats, 200.0),
         "dist_structure": distance_to_points(STRUCTURES, lats, lons),
