@@ -50,7 +50,8 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
         if stari:
             log.info("Pravila izobata promijenjena (%s -> %s) — crtam iznova.",
                      stari, potpis)
-        iz = static.izobate(stat["depth"], lats, lons,
+        iz = static.izobate(stat.get("depth_raw", stat["depth"]), lats, lons,
+                            maska=static.koridor(lats, lons),
                             **static.IZOBATE_PARAMS)
         iz["potpis"] = potpis
         iz_path.write_text(json.dumps(iz, ensure_ascii=False), encoding="utf-8")
