@@ -97,6 +97,10 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
                     preds.get("sst_raspon_C"), c, lats, lons)
                 f["properties"]["sst_promjena_3d_C"] = _at(
                     preds.get("sst_promjena_3d_C"), c, lats, lons)
+                f["properties"]["upwelling"] = _at(preds.get("upwelling"), c,
+                                                   lats, lons)
+                f["properties"]["hladnije_C"] = _at(
+                    preds.get("hladnije_od_okoline_C"), c, lats, lons)
                 f["properties"]["izgledi"] = _izgledi(
                     f["properties"]["score_mean"])
  
