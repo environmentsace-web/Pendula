@@ -1,10 +1,10 @@
 """
-Orkestrator — jedan dnevni ciklus.
+Orkestrator - jedan dnevni ciklus.
  
-    python -m panula.build            # stvarni podaci (traži Copernicus nalog)
-    python -m panula.build --sinteticki   # bez mreže, za provjeru logike
+    python -m panula.build            # stvarni podaci (trazi Copernicus nalog)
+    python -m panula.build --sinteticki   # bez mreze, za provjeru logike
  
-Izlaz je statički GeoJSON u public/ koji frontend čita bez ikakvog ključa.
+Izlaz je staticki GeoJSON u public/ koji frontend cita bez ikakvog kljuca.
 """
 from __future__ import annotations
  
@@ -45,10 +45,10 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
             stari = None
  
     if stari == potpis:
-        log.info("Izobate vec odgovaraju pravilima (%s) — ne diram ih.", potpis)
+        log.info("Izobate vec odgovaraju pravilima (%s) - ne diram ih.", potpis)
     else:
         if stari:
-            log.info("Pravila izobata promijenjena (%s -> %s) — crtam iznova.",
+            log.info("Pravila izobata promijenjena (%s -> %s) - crtam iznova.",
                      stari, potpis)
         iz = static.izobate(stat.get("depth_raw", stat["depth"]), lats, lons,
                             maska=static.koridor(lats, lons),
@@ -96,7 +96,7 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
             for f in feats:
                 c = f["properties"]["centroid"]
                 f["properties"]["dubina_panule_m"] = _at(depth_field, c, lats, lons)
-                # Koliko se povrsinska temperatura mijenja u toj zoni —
+                # Koliko se povrsinska temperatura mijenja u toj zoni -
                 # prostorno na 3 km i vremenski za tri dana.
                 f["properties"]["sst_raspon_C"] = _at(
                     preds.get("sst_raspon_C"), c, lats, lons)
@@ -184,32 +184,32 @@ def _mjeseci(mjeseci: dict) -> str:
             grupe.append(tek); tek = [m]
     grupe.append(tek)
  
-    dijelovi = [KRATKI[g[0]] if len(g) == 1 else f"{KRATKI[g[0]]}–{KRATKI[g[-1]]}"
+    dijelovi = [KRATKI[g[0]] if len(g) == 1 else f"{KRATKI[g[0]]}-{KRATKI[g[-1]]}"
                 for g in grupe]
     return " i ".join(dijelovi) if len(dijelovi) <= 2 else \
            ", ".join(dijelovi[:-1]) + " i " + dijelovi[-1]
  
  
 def _zasto_prazno(sp, day, layers) -> str:
-    """Koja kapija je ugasila vrstu — sezona ili temperatura mora."""
+    """Koja kapija je ugasila vrstu - sezona ili temperatura mora."""
     sez = zones.season_gate(sp, day.month)
     if sez <= 0:
         svi = dict(sp.months)
         if sp.ljeto:
             svi.update({m: v for m, v in sp.ljeto["months"].items() if v > 0})
-        return f"Van sezone — {sp.naziv.lower()} se lovi {_mjeseci(svi)}."
+        return f"Van sezone - {sp.naziv.lower()} se lovi {_mjeseci(svi)}."
  
     kapija = zones.sst_gate(sp, layers["sst"], day.month)
     srednja = float(np.nanmean(layers["sst"]))
     if float(np.nanmax(kapija)) <= 0.02:
         lo, hi = sp.profil(day.month)["sst_range"]
         if srednja > hi:
-            return (f"More je {srednja:.1f} °C, iznad gornje granice od "
-                    f"{hi:.0f} °C koju model uzima za ovu vrstu.")
-        return (f"More je {srednja:.1f} °C, ispod donje granice od "
-                f"{lo:.0f} °C koju model uzima za ovu vrstu.")
+            return (f"More je {srednja:.1f}  C, iznad gornje granice od "
+                    f"{hi:.0f}  C koju model uzima za ovu vrstu.")
+        return (f"More je {srednja:.1f}  C, ispod donje granice od "
+                f"{lo:.0f}  C koju model uzima za ovu vrstu.")
  
-    return "Nema područja koje prelazi prag — uslovi su ujednačeni."
+    return "Nema podrucja koje prelazi prag - uslovi su ujednaceni."
  
  
 def _izgledi(skor: float) -> str:
