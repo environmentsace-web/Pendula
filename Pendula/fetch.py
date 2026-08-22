@@ -168,9 +168,27 @@ def waves_forecast(today: dt.date):
     return _subset_safe("waves", today, end)
  
  
-def meteo(lat: float, lon: float) -> dict:
+def _get_json(url: str, params: dict, tries: int = 3,
+              timeout: int = 60) -> dict | None:
+    """HTTP upit sa ponovnim pokusajima. Vraca None ako sve propadne."""
+    import time
+    for i in range(tries):
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            wait = 5 * (i + 1)
+            log.warning("Pokusaj %d/%d za %s nije uspio (%s)",
+                        i + 1, tries, url.split("/")[2], e)
+            if i < tries - 1:
+                time.sleep(wait)
+    return None
+ 
+ 
+def meteo(lat: float, lon: float) -> dict | None:
     """Vjetar, udari, pritisak, padavine — Open-Meteo, bez kljuca."""
-    r = requests.get(OPEN_METEO_FORECAST, params={
+    out = _get_json(OPEN_METEO_FORECAST, {
         "latitude": lat, "longitude": lon,
         "hourly": "wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
                   "surface_pressure,precipitation,cloud_cover",
@@ -178,9 +196,10 @@ def meteo(lat: float, lon: float) -> dict:
         "wind_speed_unit": "kn",
         "forecast_days": FORECAST_DAYS,
         "timezone": "Europe/Podgorica",
-    }, timeout=30)
-    r.raise_for_status()
-    return r.json()
+    })
+    if out is None:
+        log.warning("Meteo nedostupan — upozorenja se racunaju samo iz talasa")
+    return out
  
  
 def bojana_discharge() -> dict:
@@ -189,22 +208,22 @@ def bojana_discharge() -> dict:
     (strelka, lica) i izbacivanje drvenih naplavina 2-5 dana nakon kisa
     (lampuga).
     """
-    r = requests.get(OPEN_METEO_FLOOD, params={
+    return _get_json(OPEN_METEO_FLOOD, {
         "latitude": BOJANA_GAUGE["lat"], "longitude": BOJANA_GAUGE["lon"],
         "daily": "river_discharge",
         "past_days": 7,
         "forecast_days": FORECAST_DAYS,
-    }, timeout=30)
-    r.raise_for_status()
-    return r.json()
+    })
  
  
-def flotsam_index(discharge: dict) -> float:
+def flotsam_index(discharge: dict | None) -> float:
     """
     Indeks naplavina 0..1: odnos maksimalnog proticaja u prozoru od 2-5 dana
     unazad prema tekucem. Vrhunac naplavina kasni za vrhuncem proticaja.
     """
-    q = discharge["daily"]["river_discharge"]
+    if not discharge:
+        return 0.0
+    q = discharge.get("daily", {}).get("river_discharge", [])
     if len(q) < 8:
         return 0.0
     window = [v for v in q[2:6] if v is not None]
