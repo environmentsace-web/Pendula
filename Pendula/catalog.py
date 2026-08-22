@@ -16,50 +16,58 @@ log = logging.getLogger(__name__)
 CACHE = Path("data/resolved_datasets.json")
  
  
+def _get(obj, *names, default=None):
+    """Cita polje bez obzira da li je objekat pydantic model ili rjecnik."""
+    for n in names:
+        if isinstance(obj, dict):
+            if n in obj:
+                return obj[n]
+        else:
+            v = getattr(obj, n, None)
+            if v is not None:
+                return v
+    return default
+ 
+ 
 def _catalogue(product_id: str) -> list:
     """Vraca listu (dataset_id, [varijable]) za dati produkt."""
     import copernicusmarine as cm
  
-    obj = None
+    cat = None
+    last = None
     for kwargs in ({"product_id": product_id},
                    {"contains": [product_id]},
                    {}):
         try:
-            obj = cm.describe(**kwargs)
+            cat = cm.describe(**kwargs)
             break
-        except TypeError:
+        except TypeError as e:
+            last = e
             continue
-    if obj is None:
-        raise RuntimeError("Ne mogu da procitam Copernicus katalog")
- 
-    data = obj if isinstance(obj, dict) else getattr(obj, "__dict__", {}) or {}
-    if not data:
-        try:
-            data = json.loads(obj.model_dump_json())   # pydantic v2
-        except Exception:
-            data = {}
+    if cat is None:
+        raise RuntimeError(f"Ne mogu da procitam Copernicus katalog: {last}")
  
     out = []
-    for prod in data.get("products", []):
-        pid = prod.get("product_id") or prod.get("productId") or ""
-        if product_id and pid != product_id:
+    for prod in _get(cat, "products", default=[]) or []:
+        pid = _get(prod, "product_id", "productId", default="")
+        if product_id and pid and pid != product_id:
             continue
-        for ds in prod.get("datasets", []):
-            did = ds.get("dataset_id") or ds.get("datasetId") or ""
+        for ds in _get(prod, "datasets", default=[]) or []:
+            did = _get(ds, "dataset_id", "datasetId", default="")
             if did:
                 out.append((did, _variables(ds)))
     return out
  
  
-def _variables(ds: dict) -> list:
+def _variables(ds) -> list:
     names = set()
-    for ver in ds.get("versions", []):
-        for part in ver.get("parts", []):
-            for svc in part.get("services", []):
-                for v in svc.get("variables", []):
-                    n = v.get("short_name") or v.get("standard_name")
+    for ver in _get(ds, "versions", default=[]) or []:
+        for part in _get(ver, "parts", default=[]) or []:
+            for svc in _get(part, "services", default=[]) or []:
+                for v in _get(svc, "variables", default=[]) or []:
+                    n = _get(v, "short_name", "shortName", "standard_name")
                     if n:
-                        names.add(n)
+                        names.add(str(n))
     return sorted(names)
  
  
