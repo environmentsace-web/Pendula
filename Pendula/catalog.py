@@ -3,7 +3,7 @@ Pronalazenje tacnih identifikatora datasetova u Copernicus katalogu.
  
 Identifikatori se mijenjaju uz nove verzije produkata, pa ih ne upisujemo
 rucno nego ih trazimo u zivom katalogu po produktu i po kljucnim rijecima.
-Rezultat se kesira, a cijela lista kandidata se ispisuje — ako pravilo
+Rezultat se kesira, a cijela lista kandidata se ispisuje - ako pravilo
 promasi, iz ispisa se odmah vidi sta zaista postoji.
 """
 from __future__ import annotations
@@ -82,7 +82,7 @@ def resolve(key: str, product_id: str, must: list, prefer: list = (),
         return cache[key]
  
     candidates = _catalogue(product_id)
-    log.info("Produkt %s — %d datasetova:", product_id, len(candidates))
+    log.info("Produkt %s - %d datasetova:", product_id, len(candidates))
     for did, vars_ in candidates:
         log.info("    %s   %s", did, ",".join(vars_[:6]))
  
