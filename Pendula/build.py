@@ -78,15 +78,20 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
             data["wave_max_m"], wind_kn, gust_kn, SAFETY)
  
         for key, sp in SPECIES.items():
+            pr = sp.profil(day.month)
             layers = dict(preds)
-            layers["depth_band"] = predictors.depth_band_for(sp, stat["depth"])
+            layers["depth_band"] = predictors.depth_band_for(
+                sp, stat["depth"], day.month)
  
             score = zones.score_species(sp, day.month, layers)
             feats = zones.extract_zones(score, lats, lons, drivers=layers,
-                                        weights=sp.weights)
+                                        weights=pr["weights"])
+ 
+            # Kad nema nijedne zone, korisniku treba razlog a ne prazan ekran.
+            prazno = None if feats else _zasto_prazno(sp, day, layers)
  
             depth_field = fields.troll_depth_advice(
-                sp.troll_depth_m, vert["prey_center"], sp.follows_dcm,
+                pr["troll_depth_m"], vert["prey_center"], pr["follows_dcm"],
                 MAX_TROLL_DEPTH)
             for f in feats:
                 c = f["properties"]["centroid"]
@@ -111,17 +116,19 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
                     "naziv": sp.naziv,
                     "latinski": sp.latinski,
                     "datum": day.isoformat(),
+                    "profil": pr["naziv_profila"],
                     "panula": {
-                        "dubina_m": [sp.troll_depth_m[0],
-                                     min(sp.troll_depth_m[1], MAX_TROLL_DEPTH)],
-                        "brzina_kn": list(sp.troll_speed_kn),
+                        "dubina_m": [pr["troll_depth_m"][0],
+                                     min(pr["troll_depth_m"][1], MAX_TROLL_DEPTH)],
+                        "brzina_kn": list(pr["troll_speed_kn"]),
                         "granica_dubine_m": MAX_TROLL_DEPTH,
                     },
                     "vertikala": {k: v for k, v in vert.items()
                                   if k != "prey_center"} |
                                  {"objasnjenje": predictors.vertical_note(vert)},
                     "bezbjednost": safety,
-                    "napomena": sp.napomena,
+                    "napomena": pr["napomena"],
+                    "razlog_praznog": prazno,
                 },
                 "features": feats,
             }
@@ -155,6 +162,53 @@ def _res_km(da) -> float:
     if y in da.coords and da[y].size > 1:
         return round(float(abs(da[y].values[1] - da[y].values[0])) * 111.32, 1)
     return None
+ 
+ 
+MJESECI = ["", "januar", "februar", "mart", "april", "maj", "jun", "jul",
+           "avgust", "septembar", "oktobar", "novembar", "decembar"]
+KRATKI = ["", "jan", "feb", "mar", "apr", "maj", "jun", "jul",
+          "avg", "sep", "okt", "nov", "dec"]
+ 
+ 
+def _mjeseci(mjeseci: dict) -> str:
+    """Aktivni mjeseci kao citljivi opsezi: 'apr-jun i sep-nov'."""
+    aktivni = sorted(m for m, v in mjeseci.items() if v > 0)
+    if not aktivni:
+        return "nikad"
+    grupe, tek = [], [aktivni[0]]
+    for m in aktivni[1:]:
+        if m == tek[-1] + 1:
+            tek.append(m)
+        else:
+            grupe.append(tek); tek = [m]
+    grupe.append(tek)
+ 
+    dijelovi = [KRATKI[g[0]] if len(g) == 1 else f"{KRATKI[g[0]]}–{KRATKI[g[-1]]}"
+                for g in grupe]
+    return " i ".join(dijelovi) if len(dijelovi) <= 2 else \
+           ", ".join(dijelovi[:-1]) + " i " + dijelovi[-1]
+ 
+ 
+def _zasto_prazno(sp, day, layers) -> str:
+    """Koja kapija je ugasila vrstu — sezona ili temperatura mora."""
+    sez = zones.season_gate(sp, day.month)
+    if sez <= 0:
+        svi = dict(sp.months)
+        if sp.ljeto:
+            svi.update({m: v for m, v in sp.ljeto["months"].items() if v > 0})
+        return f"Van sezone — {sp.naziv.lower()} se lovi {_mjeseci(svi)}."
+ 
+    kapija = zones.sst_gate(sp, layers["sst"], day.month)
+    srednja = float(np.nanmean(layers["sst"]))
+    if float(np.nanmax(kapija)) <= 0.02:
+        lo, hi = sp.profil(day.month)["sst_range"]
+        if srednja > hi:
+            return (f"More je {srednja:.1f} °C, iznad gornje granice od "
+                    f"{hi:.0f} °C koju model uzima za ovu vrstu.")
+        return (f"More je {srednja:.1f} °C, ispod donje granice od "
+                f"{lo:.0f} °C koju model uzima za ovu vrstu.")
+ 
+    return "Nema područja koje prelazi prag — uslovi su ujednačeni."
  
  
 def _izgledi(skor: float) -> str:
