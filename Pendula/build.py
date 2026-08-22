@@ -33,6 +33,30 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
     lats, lons = static.analysis_grid()
     stat = static.synthetic() if synthetic else static.build()
  
+    # Izobate su stalna osnova: prave se jednom i poslije samo stoje.
+    # Prepisuju se same cim se promijene pravila po kojima su nacrtane.
+    iz_path = out / "izobate.geojson"
+    potpis = static.izobate_potpis()
+    stari = None
+    if iz_path.exists():
+        try:
+            stari = json.loads(iz_path.read_text()).get("potpis")
+        except Exception:
+            stari = None
+ 
+    if stari == potpis:
+        log.info("Izobate vec odgovaraju pravilima (%s) — ne diram ih.", potpis)
+    else:
+        if stari:
+            log.info("Pravila izobata promijenjena (%s -> %s) — crtam iznova.",
+                     stari, potpis)
+        iz = static.izobate(stat["depth"], lats, lons,
+                            **static.IZOBATE_PARAMS)
+        iz["potpis"] = potpis
+        iz_path.write_text(json.dumps(iz, ensure_ascii=False), encoding="utf-8")
+        log.info("Izobate: %d linija, %.0f kB, potpis %s",
+                 len(iz["features"]), iz_path.stat().st_size / 1024, potpis)
+ 
     days = [today + dt.timedelta(days=i) for i in range(FORECAST_DAYS)]
     sources, written = {}, []
  
@@ -108,6 +132,7 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
         "vrste": list(SPECIES),
         "granica_dubine_panule_m": MAX_TROLL_DEPTH,
         "izvori": sources or {"rezim": "sinteticki test, bez stvarnih podataka"},
+        "izobate": "izobate.geojson",
         "fajlovi": written,
     }
     (out / "index.json").write_text(
