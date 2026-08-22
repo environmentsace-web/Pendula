@@ -39,7 +39,7 @@ def sst_gradient(sst: np.ndarray, lat: np.ndarray, res_deg: float) -> np.ndarray
     return grad
  
  
-SST_PRAG = 0.5   # stepeni C — korisnicki zadat prag "znacajne promjene"
+SST_PRAG = 0.5   # stepeni C - korisnicki zadat prag "znacajne promjene"
  
  
 def sst_local_range(sst: np.ndarray, lat: np.ndarray, res_deg: float,
@@ -139,7 +139,7 @@ def thermocline(theta: np.ndarray, depth: np.ndarray,
  
     Ljeti vodeni stub cesto ima dvije termokline: ostru i tanku na bazi dnevno
     zagrijanog povrsinskog sloja, i sezonsku dublje. Tanka je obicno JACA, pa
-    trazenje najjaceg gradijenta pogresno vraca nju — a plijen drzi sezonska.
+    trazenje najjaceg gradijenta pogresno vraca nju - a plijen drzi sezonska.
  
     Zato se ne trazi najjaci nego NAJDUBLJI izrazen gradijent unutar pojasa
     koji je za panulu uopste relevantan. "Izrazen" znaci lokalni maksimum
@@ -243,7 +243,7 @@ def reachability(prey_center: np.ndarray, prey_thickness: np.ndarray,
  
     Ovo je ono sto razdvaja upotrebljivu zonu od zanimljive. Ljeti, kad je
     stratifikacija jaka i DCM sjedne na 60-70 m, plijen je zbijen ali izvan
-    dohvata — zona se gasi. U jesen, kad mijesanje digne sloj ka povrsini,
+    dohvata - zona se gasi. U jesen, kad mijesanje digne sloj ka povrsini,
     ista pozicija postaje najbolja na potezu.
     """
     top = np.clip(prey_center - prey_thickness / 2.0, 0, None)
@@ -294,7 +294,7 @@ def forage_index(chl_surf: np.ndarray, chl_grad: np.ndarray,
  
 def current_shear(u: np.ndarray, v: np.ndarray, lat: np.ndarray,
                   res_deg: float) -> np.ndarray:
-    """Magnituda smicanja povrsinskih struja — ivice struja skupljaju plijen."""
+    """Magnituda smicanja povrsinskih struja - ivice struja skupljaju plijen."""
     dx_km, dy_km = cell_size_km(lat, res_deg)
     dudy = np.gradient(u, axis=0) / dy_km
     dvdx = np.gradient(v, axis=1) / dx_km[:, None]
