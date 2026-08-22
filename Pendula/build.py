@@ -110,6 +110,15 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
     return index
  
  
+def _meteo_max(met, field: str, default: float) -> float:
+    """Najveca vrijednost iz meteo prognoze; podrazumijevana ako je nema."""
+    try:
+        vals = [v for v in met["hourly"][field] if v is not None]
+        return float(max(vals)) if vals else default
+    except (TypeError, KeyError):
+        return default
+ 
+ 
 def _levels(ds) -> np.ndarray:
     for d in ("depth", "deptht", "lev"):
         if d in ds.coords:
@@ -184,8 +193,8 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
         v=rg(surf(phy["currents"]["vo"].sel(**sel))),
         mld=rg(phy["mld"]["mlotst"].sel(**sel)),
         wave_max_m=float(wav["VHM0"].sel(**sel).max()),
-        wind_kn=float(np.nanmax(met["hourly"]["wind_speed_10m"])),
-        gust_kn=float(np.nanmax(met["hourly"]["wind_gusts_10m"])),
+        wind_kn=_meteo_max(met, "wind_speed_10m", 8.0),
+        gust_kn=_meteo_max(met, "wind_gusts_10m", 12.0),
         flotsam=fetch.flotsam_index(q),
     )
  
