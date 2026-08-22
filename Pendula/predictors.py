@@ -168,9 +168,14 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
     return predictors, vertical
  
  
-def depth_band_for(sp: Species, depth: np.ndarray) -> np.ndarray:
-    """`depth_band` je razlicit za svaku vrstu — racuna se iz depth_pref."""
-    return _band(depth, *sp.depth_pref)
+def depth_band_for(sp: Species, depth: np.ndarray,
+                   month: int | None = None) -> np.ndarray:
+    """
+    `depth_band` je razlicit za svaku vrstu, a kod nekih i za dio sezone:
+    strelka i lica su ljeti na otvorenom, u proljece i jesen uz obalu.
+    """
+    pr = sp.profil(month) if month is not None else dict(depth_pref=sp.depth_pref)
+    return _band(depth, *pr["depth_pref"])
  
  
 def vertical_note(v: dict) -> str:
