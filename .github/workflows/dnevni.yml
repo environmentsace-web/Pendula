@@ -76,25 +76,49 @@ jobs:
           key: emodnet-bathymetry-v1
  
       - name: Izracunaj zone
-        working-directory: ${{ steps.korijen.outputs.dir }}
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.CMEMS_USERNAME }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.CMEMS_PASSWORD }}
         run: |
+          set -e
           echo "Radni folder: $(pwd)"
-          ls -la
-          PYTHONPATH=. python -m ${{ steps.korijen.outputs.pkg }}.build
+ 
+          # Sam trazimo kod, bez prenosenja vrijednosti izmedju koraka.
+          F=$(find . -name build.py -not -path "./.git/*" | head -1)
+          if [ -z "$F" ]; then
+            echo "GRESKA: nema build.py"; exit 1
+          fi
+          PKG=$(dirname "$F")
+          DIR=$(dirname "$PKG")
+          NAME=$(basename "$PKG")
+          [ -f "$PKG/__init__.py" ] || touch "$PKG/__init__.py"
+ 
+          echo "Kod: $PKG | pokrecem '$NAME.build' iz '$DIR'"
+          cd "$DIR"
+          PYTHONPATH=. python -m "$NAME.build"
+ 
+          echo "Python zavrsio sa kodom $?"
+          ls -la public || { echo "GRESKA: folder public nije nastao"; exit 1; }
  
       - name: Provjeri da izlaz postoji
-        working-directory: ${{ steps.korijen.outputs.dir }}
         run: |
-          test -f public/index.json || { echo "Nema izlaza"; exit 1; }
+          cd "$(dirname "$(dirname "$(find . -name build.py -not -path './.git/*' | head -1)")")"
+          echo "Radni folder: $(pwd)"
+          echo "--- sve sto je nastalo ---"
+          find . -name "*.geojson" -o -name "index.json" | head -30
+          echo "--------------------------"
+          if [ ! -f public/index.json ]; then
+            echo "Nema public/index.json ovdje. Sadrzaj foldera:"
+            ls -la
+            [ -d public ] && ls -la public
+            exit 1
+          fi
           echo "Fajlova: $(ls public | wc -l)"
  
       - name: Objavi
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ${{ steps.korijen.outputs.dir }}/public
+          publish_dir: public
           keep_files: true
-          
+ 
