@@ -113,6 +113,74 @@ def distance_to_coast(depth: np.ndarray, lats: np.ndarray) -> np.ndarray:
     return out
  
  
+IZOBATE_PARAMS = dict(plitko_korak=20.0, plitko_do=100.0, duboko_korak=50.0)
+ 
+ 
+def izobate_potpis() -> str:
+    """
+    Kratak otisak pravila po kojima su izobate napravljene.
+ 
+    Upisuje se u sam fajl. Dok se otisak poklapa, fajl se ne dira; cim se
+    promijene korak, granica ili domen, stari se zamjenjuje novim. Tako se
+    izobate racunaju jednom i poslije samo stoje.
+    """
+    import hashlib
+    osnov = f"{IZOBATE_PARAMS}|{BBOX}|{GRID_RES}"
+    return hashlib.md5(osnov.encode()).hexdigest()[:10]
+ 
+ 
+def izobate(depth: np.ndarray, lats: np.ndarray, lons: np.ndarray,
+            plitko_korak: float = 20.0, plitko_do: float = 100.0,
+            duboko_korak: float = 50.0, min_tacaka: int = 8) -> dict:
+    """
+    Linije jednakih dubina kao GeoJSON.
+ 
+    Korak od 20 m do 100 m — tu se panula vodi i tu dubina nesto znaci.
+    Dublje na svakih 50 m, samo radi orijentacije prema ivici selfa.
+    """
+    from skimage import measure
+ 
+    nivoi = list(np.arange(plitko_korak, plitko_do + 1, plitko_korak))
+    dno = float(np.nanmax(depth))
+    nivoi += list(np.arange(plitko_do + duboko_korak, dno, duboko_korak))
+ 
+    popuna = np.where(np.isnan(depth), -50.0, depth)   # kopno kao "iznad nule"
+    feats = []
+    for z in nivoi:
+        for c in measure.find_contours(popuna, float(z)):
+            if len(c) < min_tacaka:
+                continue
+            linija = [[round(float(_interp1(lons, t[1])), 4),
+                       round(float(_interp1(lats, t[0])), 4)] for t in c]
+            linija = _prorijedi(linija, 0.0035)
+            if len(linija) < 4:
+                continue
+            feats.append({
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": linija},
+                "properties": {"dubina_m": int(z),
+                               "glavna": int(z) in (100, 200) or int(z) % 500 == 0},
+            })
+    return {"type": "FeatureCollection", "features": feats}
+ 
+ 
+def _interp1(osa: np.ndarray, poz: float) -> float:
+    i0 = int(np.floor(poz)); i1 = min(i0 + 1, len(osa) - 1)
+    f = poz - i0
+    return osa[i0] * (1 - f) + osa[i1] * f
+ 
+ 
+def _prorijedi(tacke: list, tol: float) -> list:
+    """Douglas-Peucker preko shapely; bez njega prosto prorjedjivanje."""
+    try:
+        from shapely.geometry import LineString
+        g = LineString(tacke).simplify(tol, preserve_topology=False)
+        return [[round(x, 4), round(y, 4)] for x, y in g.coords]
+    except Exception:
+        k = max(1, len(tacke) // 80)
+        return tacke[::k]
+ 
+ 
 def build() -> dict:
     """Racuna sve staticke slojeve i kesira ih."""
     import xarray as xr
