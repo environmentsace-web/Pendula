@@ -1,5 +1,5 @@
 """
-Sklapanje prediktora — od sirovih polja do rjecnika normalizovanih slojeva
+Sklapanje prediktora - od sirovih polja do rjecnika normalizovanih slojeva
 cija imena tacno odgovaraju kljucevima tezina u species.py.
  
 Prostorni prediktori su 2D polja 0..1.
@@ -108,7 +108,7 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
  
     ones = np.ones_like(sst)
  
-    # Promjena temperature povrsine — prostorna i vremenska, obje mjerene
+    # Promjena temperature povrsine - prostorna i vremenska, obje mjerene
     # prema apsolutnom pragu od 0.5 C, ne prema ostatku domena.
     raspon = fields.sst_local_range(sst, lats, res_deg, window_km=3.0)
     prelaz = fields.prelazi_prag(raspon)
@@ -119,7 +119,7 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         "sst": sst,
         "vertical_concentration": vgate,
  
-        # termalni — front je sada jaci od 0.5 C na 3 km, a ne "jaci od ostalih"
+        # termalni - front je sada jaci od 0.5 C na 3 km, a ne "jaci od ostalih"
         "sst_front": np.fmax(prelaz, 0.6 * tend_prag),
         "sst_raspon_C": raspon,
         "sst_warming": fields.prelazi_prag(np.clip(tend3, 0, None) * 3.0),
@@ -145,7 +145,7 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         "canyon_depth": _band(depth, 400.0, 1400.0),
         "surf_zone": _band(depth, 2.0, 15.0) * _near(static["dist_bojana"], 15.0),
         "bojana_plume": plume,
-        # uzak pojas 0.3-1.5 km od obale — tu prolaze male sabljarke
+        # uzak pojas 0.3-1.5 km od obale - tu prolaze male sabljarke
         "uz_obalu": _band(static["dist_coast"], 0.3, 1.5),
  
         # vertikalni
@@ -189,17 +189,17 @@ def vertical_note(v: dict) -> str:
     if zd is not None:
         deb = v.get("dcm_debljina_m")
         raspon = f" (sloj debljine {deb:.0f} m)" if deb else ""
-        lanac = (f" Najveća gustina hlorofila je na {zd:.0f} m{raspon} — tu se "
-                 f"skuplja sitna riba koja se hrani planktonom, pa je i najveća "
-                 f"vjerovatnoća da su grabljivice tu negdje.")
+        lanac = (f" Najveca gustina hlorofila je na {zd:.0f} m{raspon} - tu se "
+                 f"skuplja sitna riba koja se hrani planktonom, pa je i najveca "
+                 f"vjerovatnoca da su grabljivice tu negdje.")
  
     if zt is None:
-        return ("Vodeni stub izmiješan — plijen razvučen po dubini, "
+        return ("Vodeni stub izmijesan - plijen razvucen po dubini, "
                 "koncentracije slabije." + lanac)
     if r is not None and r < 0.35:
-        return (f"Termoklina na {zt:.0f} m. Sloj plijena leži pretežno ispod "
+        return (f"Termoklina na {zt:.0f} m. Sloj plijena lezi pretezno ispod "
                 f"{MAX_TROLL_DEPTH:.0f} m, dakle izvan dohvata panule." + lanac)
-    return (f"Termoklina na {zt:.0f} m drži plijen stisnut u uzak sloj." + lanac)
+    return (f"Termoklina na {zt:.0f} m drzi plijen stisnut u uzak sloj." + lanac)
  
  
 def _med(a):
