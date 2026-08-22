@@ -2,38 +2,43 @@
 Preuzimanje podataka. Zahtijeva mrezu i Copernicus nalog:
   export COPERNICUSMARINE_SERVICE_USERNAME=...
   export COPERNICUSMARINE_SERVICE_PASSWORD=...
-
+ 
 Sve funkcije kesiraju na disk. Ako preuzimanje padne, koristi se posljednje
 uspjesno polje i to se oznacava u izlazu (polje `zastarjelo`), da korisnik
 nikad ne dobije star podatak predstavljen kao svjez.
 """
 from __future__ import annotations
-
+ 
 import datetime as dt
 import logging
 from pathlib import Path
-
+ 
 import numpy as np
 import requests
 import xarray as xr
-
+ 
+from . import catalog
 from .config import (BBOX, DATASETS, OPEN_METEO_FORECAST, OPEN_METEO_FLOOD,
                      BOJANA_GAUGE, FORECAST_DAYS)
-
+ 
 log = logging.getLogger(__name__)
 CACHE = Path("data/cache")
 CACHE.mkdir(parents=True, exist_ok=True)
-
-
+ 
+ 
 def _subset(key: str, start: dt.date, end: dt.date, **kw) -> xr.Dataset:
     """Tanak omotac oko copernicusmarine.subset sa kesiranjem."""
     import copernicusmarine as cm
-
+ 
     spec = DATASETS[key]
+    dataset_id = catalog.resolve(
+        key, spec["product"], spec["must"],
+        spec.get("prefer", ()), spec.get("avoid", ()))
+ 
     out = CACHE / f"{key}_{start:%Y%m%d}_{end:%Y%m%d}.nc"
     if not out.exists():
         cm.subset(
-            dataset_id=spec["dataset_id"],
+            dataset_id=dataset_id,
             variables=spec["variables"],
             minimum_longitude=BBOX["lon_min"], maximum_longitude=BBOX["lon_max"],
             minimum_latitude=BBOX["lat_min"], maximum_latitude=BBOX["lat_max"],
@@ -46,8 +51,41 @@ def _subset(key: str, start: dt.date, end: dt.date, **kw) -> xr.Dataset:
             **kw,
         )
     return xr.open_dataset(out)
-
-
+ 
+ 
+def _subset_safe(key, start, end, **kw):
+    """Kao _subset, ali ako imena varijabli ne odgovaraju, skida sve."""
+    try:
+        return _subset(key, start, end, **kw)
+    except Exception as e:
+        if "variable" not in str(e).lower():
+            raise
+        log.warning("Imena varijabli ne odgovaraju (%s) — skidam sve", e)
+        spec = DATASETS[key]
+        saved = spec["variables"]
+        spec["variables"] = None
+        try:
+            ds = _subset(key, start, end, **kw)
+        finally:
+            spec["variables"] = saved
+        log.info("Dostupne varijable u '%s': %s", key, list(ds.data_vars))
+        return ds
+ 
+ 
+def pick(ds, *candidates):
+    """Prva varijabla iz dataseta koja postoji medju ponudjenim imenima."""
+    for c in candidates:
+        if c in ds.data_vars:
+            return ds[c]
+    lower = {v.lower(): v for v in ds.data_vars}
+    for c in candidates:
+        if c.lower() in lower:
+            return ds[lower[c.lower()]]
+    if len(ds.data_vars) == 1:
+        return ds[list(ds.data_vars)[0]]
+    raise KeyError(f"Nema nijedne od {candidates}; postoji: {list(ds.data_vars)}")
+ 
+ 
 def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
                        min_coverage: float = 0.35) -> tuple[xr.DataArray, dt.date]:
     """
@@ -58,7 +96,7 @@ def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
     for back in range(max_lookback):
         day = today - dt.timedelta(days=back)
         try:
-            ds = _subset("chl_sat", day, day)
+            ds = _subset_safe("chl_sat", day, day)
         except Exception as e:
             log.warning("OLCI %s nedostupan: %s", day, e)
             continue
@@ -70,53 +108,53 @@ def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
             return chl, day
         log.info("OLCI %s pokrivanje samo %.0f%% — trazim dalje",
                  day, coverage * 100)
-
+ 
     log.warning("Prelazim na L4 gap-free (interpolirano)")
     for back in range(max_lookback):
         day = today - dt.timedelta(days=back)
         try:
-            ds = _subset("chl_sat_gapfree", day, day)
+            ds = _subset_safe("chl_sat_gapfree", day, day)
             return ds["CHL"].isel(time=0), day
         except Exception:
             continue
     raise RuntimeError("Nema dostupnog hlorofila u posljednjih 7 dana")
-
-
+ 
+ 
 def sst_with_history(today: dt.date, lags=(3, 7)):
     """Satelitski SST za danas i za zadate pomake unazad (za tendenciju)."""
     start = today - dt.timedelta(days=max(lags) + 2)
-    ds = _subset("sst_sat", start, today)
-    sst = ds["analysed_sst"]
+    ds = _subset_safe("sst_sat", start, today)
+    sst = pick(ds, "analysed_sst", "adjusted_sea_surface_temperature", "sst")
     if sst.attrs.get("units", "").lower() in ("kelvin", "k"):
         sst = sst - 273.15
     return sst
-
-
+ 
+ 
 def physics_forecast(today: dt.date):
     """Struje, MLD, 3D temperatura i salinitet — danas + prognoza."""
     end = today + dt.timedelta(days=FORECAST_DAYS)
     return {
-        "currents": _subset("currents", today, end),
-        "mld": _subset("mld", today, end),
-        "temp3d": _subset("temp3d", today, end),
-        "sal3d": _subset("sal3d", today, end),
+        "currents": _subset_safe("currents", today, end),
+        "mld": _subset_safe("mld", today, end),
+        "temp3d": _subset_safe("temp3d", today, end),
+        "sal3d": _subset_safe("sal3d", today, end),
     }
-
-
+ 
+ 
 def bgc_forecast(today: dt.date):
     """3D hlorofil i nitrati -> DCM i nutriklina."""
     end = today + dt.timedelta(days=FORECAST_DAYS)
     return {
-        "chl3d": _subset("bgc3d", today, end),
-        "no3": _subset("nutrients", today, end),
+        "chl3d": _subset_safe("bgc3d", today, end),
+        "no3": _subset_safe("nutrients", today, end),
     }
-
-
+ 
+ 
 def waves_forecast(today: dt.date):
     end = today + dt.timedelta(days=FORECAST_DAYS)
-    return _subset("waves", today, end)
-
-
+    return _subset_safe("waves", today, end)
+ 
+ 
 def meteo(lat: float, lon: float) -> dict:
     """Vjetar, udari, pritisak, padavine — Open-Meteo, bez kljuca."""
     r = requests.get(OPEN_METEO_FORECAST, params={
@@ -130,8 +168,8 @@ def meteo(lat: float, lon: float) -> dict:
     }, timeout=30)
     r.raise_for_status()
     return r.json()
-
-
+ 
+ 
 def bojana_discharge() -> dict:
     """
     Proticaj Bojane (GloFAS). Kljucno za dvije stvari: jacinu bocatne plume
@@ -146,8 +184,8 @@ def bojana_discharge() -> dict:
     }, timeout=30)
     r.raise_for_status()
     return r.json()
-
-
+ 
+ 
 def flotsam_index(discharge: dict) -> float:
     """
     Indeks naplavina 0..1: odnos maksimalnog proticaja u prozoru od 2-5 dana
@@ -161,3 +199,4 @@ def flotsam_index(discharge: dict) -> float:
     if not window or not baseline:
         return 0.0
     return float(np.clip((max(window) / baseline - 1.0) / 2.0, 0, 1))
+ 
