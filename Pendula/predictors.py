@@ -22,8 +22,9 @@ from .species import Species
 REQUIRED = {
     "floating_objects", "sst_front", "depth_band", "bojana_plume",
     "chl_gradient", "current_shear", "forage_index", "calm_sea", "diel",
-    "current_edge", "dist_shelf_edge", "canyon_depth", "night", "moon",
+    "current_edge", "dist_shelf_edge", "canyon_depth",
     "thermocline_depth", "dist_structure", "slope", "turbidity", "surf_zone",
+    "uz_obalu",
 }
  
  
@@ -106,7 +107,6 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
     speed = np.hypot(u, v)
  
     ones = np.ones_like(sst)
-    moon = moon_illumination(date)
  
     # Promjena temperature povrsine — prostorna i vremenska, obje mjerene
     # prema apsolutnom pragu od 0.5 C, ne prema ostatku domena.
@@ -145,6 +145,8 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         "canyon_depth": _band(depth, 400.0, 1400.0),
         "surf_zone": _band(depth, 2.0, 15.0) * _near(static["dist_bojana"], 15.0),
         "bojana_plume": plume,
+        # uzak pojas 0.3-1.5 km od obale — tu prolaze male sabljarke
+        "uz_obalu": _band(static["dist_coast"], 0.3, 1.5),
  
         # vertikalni
         "thermocline_depth": _band(np.nan_to_num(z_thermo, nan=999.0),
@@ -153,9 +155,10 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         # dogadjajni i skalarni
         "floating_objects": float(flotsam) * _near(static["dist_bojana"], 25.0),
         "calm_sea": ones * calm_sea_factor(wave_max_m),
-        "diel": ones,       # korisnik bira sat; najbolji sati se javljaju posebno
-        "night": ones,
-        "moon": ones * moon,
+        # Korisnik sam bira kad izlazi, pa doba dana ne gasi zonu; najbolji
+        # sati se javljaju uz vrstu. Mjesecina vise nijednoj vrsti ne treba
+        # otkad sabljarka nije nocna.
+        "diel": ones,
     }
  
     vertical = dict(
@@ -212,6 +215,8 @@ def validate_coverage() -> list:
     used = set()
     for sp in SPECIES.values():
         used |= set(sp.weights.keys())
+        if sp.ljeto:
+            used |= set(sp.ljeto["weights"].keys())
     missing = sorted(used - REQUIRED)
     unused = sorted(REQUIRED - used)
     out = []
