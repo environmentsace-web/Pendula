@@ -35,6 +35,11 @@ def _subset(key: str, start: dt.date, end: dt.date, **kw) -> xr.Dataset:
         key, spec["product"], spec["must"],
         spec.get("prefer", ()), spec.get("avoid", ()))
  
+    # Prvi nivo dubine nije 0 m nego oko 1 m, pa ne zadajemo donju granicu.
+    # Gornju saljemo samo za 3D slojeve; povrsinski se biraju kasnije.
+    if spec.get("max_depth"):
+        kw.setdefault("maximum_depth", spec["max_depth"])
+ 
     out = CACHE / f"{key}_{start:%Y%m%d}_{end:%Y%m%d}.nc"
     if not out.exists():
         cm.subset(
@@ -44,8 +49,6 @@ def _subset(key: str, start: dt.date, end: dt.date, **kw) -> xr.Dataset:
             minimum_latitude=BBOX["lat_min"], maximum_latitude=BBOX["lat_max"],
             start_datetime=f"{start}T00:00:00",
             end_datetime=f"{end}T23:59:59",
-            minimum_depth=0,
-            maximum_depth=spec.get("max_depth", 1.0),
             output_filename=str(out),
             overwrite=True,
             **kw,
@@ -58,7 +61,17 @@ def _subset_safe(key, start, end, **kw):
     try:
         return _subset(key, start, end, **kw)
     except Exception as e:
-        if "variable" not in str(e).lower():
+        msg = str(e).lower()
+        if "depth" in msg:
+            log.warning("Dubina ne odgovara (%s) — pokusavam bez nje", e)
+            kw.pop("maximum_depth", None)
+            saved = DATASETS[key].pop("max_depth", None)
+            try:
+                return _subset(key, start, end, **kw)
+            finally:
+                if saved is not None:
+                    DATASETS[key]["max_depth"] = saved
+        if "variable" not in msg:
             raise
         log.warning("Imena varijabli ne odgovaraju (%s) — skidam sve", e)
         spec = DATASETS[key]
