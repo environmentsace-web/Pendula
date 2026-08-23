@@ -1,5 +1,5 @@
 {
-  "generisano": "2026-08-22T20:08:30Z",
+  "generisano": "2026-08-23T04:59:27Z",
   "domen": {
     "lon": [
       18.45,
@@ -11,9 +11,9 @@
     ]
   },
   "dani": [
-    "2026-08-22",
     "2026-08-23",
-    "2026-08-24"
+    "2026-08-24",
+    "2026-08-25"
   ],
   "vrste": [
     "lampuga",
@@ -44,14 +44,6 @@
   },
   "izobate": "izobate.geojson",
   "fajlovi": [
-    "lampuga_2026-08-22.geojson",
-    "trupac_2026-08-22.geojson",
-    "plamida_2026-08-22.geojson",
-    "tuna_2026-08-22.geojson",
-    "sabljarka_2026-08-22.geojson",
-    "gof_2026-08-22.geojson",
-    "strelka_2026-08-22.geojson",
-    "lica_2026-08-22.geojson",
     "lampuga_2026-08-23.geojson",
     "trupac_2026-08-23.geojson",
     "plamida_2026-08-23.geojson",
@@ -67,6 +59,14 @@
     "sabljarka_2026-08-24.geojson",
     "gof_2026-08-24.geojson",
     "strelka_2026-08-24.geojson",
-    "lica_2026-08-24.geojson"
+    "lica_2026-08-24.geojson",
+    "lampuga_2026-08-25.geojson",
+    "trupac_2026-08-25.geojson",
+    "plamida_2026-08-25.geojson",
+    "tuna_2026-08-25.geojson",
+    "sabljarka_2026-08-25.geojson",
+    "gof_2026-08-25.geojson",
+    "strelka_2026-08-25.geojson",
+    "lica_2026-08-25.geojson"
   ]
 }
