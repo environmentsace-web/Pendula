@@ -1,5 +1,5 @@
 {
-  "generisano": "2026-08-23T04:59:27Z",
+  "generisano": "2026-08-24T05:27:56Z",
   "domen": {
     "lon": [
       18.45,
@@ -11,9 +11,9 @@
     ]
   },
   "dani": [
-    "2026-08-23",
     "2026-08-24",
-    "2026-08-25"
+    "2026-08-25",
+    "2026-08-26"
   ],
   "vrste": [
     "lampuga",
@@ -28,11 +28,11 @@
   "granica_dubine_panule_m": 50.0,
   "izvori": {
     "sst": {
-      "datum": "2026-08-22",
+      "datum": "2026-08-23",
       "rezolucija_km": 0.9
     },
     "hlorofil": {
-      "datum": "2026-08-21",
+      "datum": "2026-08-23",
       "senzor": "OLCI 300 m"
     },
     "struje": {
@@ -44,14 +44,6 @@
   },
   "izobate": "izobate.geojson",
   "fajlovi": [
-    "lampuga_2026-08-23.geojson",
-    "trupac_2026-08-23.geojson",
-    "plamida_2026-08-23.geojson",
-    "tuna_2026-08-23.geojson",
-    "sabljarka_2026-08-23.geojson",
-    "gof_2026-08-23.geojson",
-    "strelka_2026-08-23.geojson",
-    "lica_2026-08-23.geojson",
     "lampuga_2026-08-24.geojson",
     "trupac_2026-08-24.geojson",
     "plamida_2026-08-24.geojson",
@@ -67,6 +59,14 @@
     "sabljarka_2026-08-25.geojson",
     "gof_2026-08-25.geojson",
     "strelka_2026-08-25.geojson",
-    "lica_2026-08-25.geojson"
+    "lica_2026-08-25.geojson",
+    "lampuga_2026-08-26.geojson",
+    "trupac_2026-08-26.geojson",
+    "plamida_2026-08-26.geojson",
+    "tuna_2026-08-26.geojson",
+    "sabljarka_2026-08-26.geojson",
+    "gof_2026-08-26.geojson",
+    "strelka_2026-08-26.geojson",
+    "lica_2026-08-26.geojson"
   ]
 }
