@@ -155,11 +155,12 @@ def physics_forecast(today: dt.date):
  
  
 def bgc_forecast(today: dt.date):
-    """3D hlorofil i nitrati -> DCM i nutriklina."""
+    """3D hlorofil, nitrati i prozirnost -> DCM, nutriklina, bistrina."""
     end = today + dt.timedelta(days=FORECAST_DAYS)
     return {
         "chl3d": _subset_safe("bgc3d", today, end),
         "no3": _subset_safe("nutrients", today, end),
+        "optika": _subset_safe("optika", today, end),
     }
  
  
