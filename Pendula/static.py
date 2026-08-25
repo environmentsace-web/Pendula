@@ -13,7 +13,8 @@ from pathlib import Path
 import numpy as np
 from scipy import ndimage
  
-from .config import BBOX, GRID_RES, STATIC_CACHE, STRUCTURES
+from .config import (BBOX, GRID_RES, MAX_DUBINA_M, STATIC_CACHE,
+                     STRUCTURES)
  
 log = logging.getLogger(__name__)
 EARTH_R = 6371.0
@@ -94,6 +95,64 @@ def distance_to_isobath(depth: np.ndarray, lats: np.ndarray,
     dx_km, dy_km = _cell_km(lats)
     dist_cells = ndimage.distance_transform_edt(~band)
     return dist_cells * float(np.mean(dx_km) + dy_km) / 2.0
+ 
+ 
+def hrapavost(depth: np.ndarray, prozor: int = 1) -> np.ndarray:
+    """
+    Zakrivljenost dna u metrima - mjera koliko se dno lomi.
+ 
+    Ne mjeri se raspon dubine nego druga izvedenica. Razlog: raspon raste sa
+    nagibom, pa cijela kosina selfa ispadne kao "struktura". Zakrivljenost je
+    nula na svakoj ravnoj kosini koliko god strmoj, a velika tacno tamo gdje
+    dno mijenja nagib - na seki, prelomu ili ivici kamenjara.
+    """
+    valid = np.isfinite(depth)
+    if not valid.any():
+        return np.full_like(depth, np.nan)
+ 
+    # praznine se popune zaglacanom dubinom, da ivica kopna ne pravi lazni lom
+    popuna = np.where(valid, depth, 0.0)
+    zbir = ndimage.uniform_filter(popuna, size=9)
+    broj = ndimage.uniform_filter(valid.astype(float), size=9)
+    glatko = np.where(broj > 0.2, zbir / np.maximum(broj, 1e-6), np.nan)
+    radna = np.where(valid, depth, glatko)
+    radna = np.where(np.isfinite(radna), radna, float(np.nanmedian(depth)))
+ 
+    lom = np.abs(ndimage.laplace(ndimage.uniform_filter(radna, size=3)))
+ 
+    # Odbacuje se samo prvi red uz kopno. Sire odbacivanje bi izbacilo i
+    # prave seke, koje su cesto tik uz obalu.
+    uz_ivicu = ndimage.binary_dilation(~valid, iterations=prozor)
+    lom[~valid | uz_ivicu] = np.nan
+    return lom
+ 
+ 
+def distance_to_structure(depth: np.ndarray, lats: np.ndarray,
+                          pojas=(15.0, 90.0), prag_m: float = 6.0) -> np.ndarray:
+    """
+    Rastojanje u km do najblizeg izrazenog preloma dna unutar lovnog pojasa.
+ 
+    Trazi se zakrivljenost iznad `prag_m` metara, i to samo na dubinama gdje
+    se gof zaista lovi - inace bi i ivica selfa ispala kao "struktura".
+    """
+    hrap = hrapavost(depth)
+    pojas_maska = (depth >= pojas[0]) & (depth <= pojas[1]) & np.isfinite(hrap)
+    if pojas_maska.sum() < 20:
+        return np.full_like(depth, np.nan)
+ 
+    # Prag se prilagodjava dnu: uzima se gornjih par procenata zakrivljenosti
+    # unutar lovnog pojasa, ali nikad ispod apsolutnog minimuma. Na ravnom
+    # pjescanom dnu apsolutni prag odlucuje i nista se ne proglasava sekom.
+    prag = max(prag_m, float(np.nanpercentile(hrap[pojas_maska], 97)))
+    seka = pojas_maska & (hrap > prag)
+    if seka.sum() == 0:
+        return np.full_like(depth, np.nan)
+ 
+    dx_km, dy_km = _cell_km(lats)
+    d = ndimage.distance_transform_edt(~seka)
+    out = d * float(np.mean(dx_km) + dy_km) / 2.0
+    out[np.isnan(depth)] = np.nan
+    return out
  
  
 def distance_to_points(points: list, lats: np.ndarray,
@@ -223,10 +282,13 @@ def build() -> dict:
     depth_raw = load_bathymetry()
     depth = depth_raw.copy()
     depth[~koridor(lats, lons)] = np.nan
+    depth[depth > MAX_DUBINA_M] = np.nan      # predaleko od obale
     layers = {
         "depth": depth,
         "depth_raw": depth_raw,
         "slope": slope_deg(depth, lats),
+        "hrapavost": hrapavost(depth),
+        "dist_seka": distance_to_structure(depth, lats),
         "dist_shelf_edge": distance_to_isobath(depth, lats, 200.0),
         "dist_structure": distance_to_points(STRUCTURES, lats, lons),
         "dist_bojana": distance_to_points(
@@ -246,22 +308,45 @@ def build() -> dict:
 def synthetic(seed: int = 0) -> dict:
     """
     Sinteticki staticki slojevi za testiranje bez batimetrijskog fajla.
-    Grubo oponasa stvarnu geometriju: plitko na SI, strmi pad ka JZ.
+ 
+    Dubina raste sa udaljenoscu od obalne linije Lustica-Bojana, pa domen
+    ima pravi self umjesto strme ravni. Dodate su dvije seke, da automatsko
+    prepoznavanje struktura ima sta da nadje.
     """
     lats, lons = analysis_grid()
     LON, LAT = np.meshgrid(lons, lats)
  
-    depth = np.clip(
-        2600 * ((42.30 - LAT) * 0.35 + (19.50 - LON) * 1.25) - 250, 2, 1400)
-    depth[(LAT > 42.16) & (LON < 18.86)] = np.nan     # kopno SZ
-    depth[(LAT > 42.02) & (LON > 19.30)] = np.nan     # kopno IZ
+    # okomito rastojanje od obalne linije (Lustica -> usce Bojane)
+    x1, y1, x2, y2 = 18.530, 42.400, 19.353, 41.852
+    kx = (x2 - x1) * 111.32 * np.cos(np.deg2rad(42.1))
+    ky = (y2 - y1) * 111.32
+    duz = np.hypot(kx, ky)
+    px = (LON - x1) * 111.32 * np.cos(np.deg2rad(LAT))
+    py = (LAT - y1) * 111.32
+    odmak = (px * ky - py * kx) / duz          # negativno = ka otvorenom moru
+ 
+    depth = np.clip(4.0 + 9.0 * np.clip(-odmak, 0, None), 2, 600)
+    depth[odmak > 1.0] = np.nan                # kopno
+ 
+    # Dvije seke unutar lovnog pojasa. Postavljaju se na celije koje vec
+    # imaju odgovarajucu dubinu, umjesto na rucno pogodjene koordinate -
+    # tako uvijek zavrse u moru bez obzira na geometriju obale.
+    for ciljna, visina in [(45.0, 38.0), (70.0, 30.0)]:
+        razlika = np.where(np.isfinite(depth), np.abs(depth - ciljna), np.inf)
+        i, j = np.unravel_index(np.argmin(razlika), razlika.shape)
+        r = np.hypot((LAT - lats[i]) * 111.32, (LON - lons[j]) * 82.6)
+        depth = depth - visina * np.exp(-(r ** 2) / (2 * 1.4 ** 2))
+ 
+    depth[~koridor(lats, lons)] = np.nan
     depth_raw = depth.copy()
-    depth[~koridor(lats, lons)] = np.nan              # van poteza
+    depth[depth > MAX_DUBINA_M] = np.nan
  
     return {
         "depth": depth,
         "depth_raw": depth_raw,
         "slope": slope_deg(depth, lats),
+        "hrapavost": hrapavost(depth),
+        "dist_seka": distance_to_structure(depth, lats),
         "dist_shelf_edge": distance_to_isobath(depth, lats, 200.0),
         "dist_structure": distance_to_points(STRUCTURES, lats, lons),
         "dist_bojana": distance_to_points(
