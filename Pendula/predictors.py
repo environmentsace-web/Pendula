@@ -15,7 +15,7 @@ import math
 import numpy as np
  
 from . import fields
-from .config import MAX_TROLL_DEPTH
+from .config import MAX_DUBINA_M, MAX_TROLL_DEPTH
 from .species import Species
  
 # Svi kljucevi tezina koji moraju postojati kao prediktor
@@ -23,8 +23,9 @@ REQUIRED = {
     "floating_objects", "sst_front", "depth_band", "bojana_plume",
     "chl_gradient", "current_shear", "forage_index", "calm_sea", "diel",
     "current_edge", "dist_shelf_edge", "canyon_depth",
-    "thermocline_depth", "dist_structure", "slope", "turbidity", "surf_zone",
-    "uz_obalu",
+    "thermocline_depth", "dist_structure", "turbidity", "surf_zone",
+    "uz_obalu", "auto_struktura", "bistrina", "pridnena_temp",
+    "termoklina_na_dnu",
 }
  
  
@@ -34,7 +35,8 @@ def _norm(a):
  
 def _near(dist_km: np.ndarray, scale: float) -> np.ndarray:
     """Blizina kao eksponencijalno opadanje: 1 na nuli, ~0.37 na `scale` km."""
-    return np.exp(-np.clip(dist_km, 0, None) / scale)
+    d = np.nan_to_num(np.asarray(dist_km, dtype=float), nan=1e6)
+    return np.exp(-np.clip(d, 0, None) / scale)
  
  
 def _band(x: np.ndarray, lo: float, hi: float, soft: float = 0.35) -> np.ndarray:
@@ -66,7 +68,8 @@ def calm_sea_factor(wave_max_m: float) -> float:
  
  
 # --------------------------------------------------------------- GLAVNI POSAO
-def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
+def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf, kd490=None,
+                     bottom_t=None,
                      theta, theta_levels, chl3d, chl_levels,
                      salinity, u, v, mld, static, lats, lons,
                      date, wave_max_m, flotsam, res_deg=0.01) -> dict:
@@ -139,10 +142,22 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         "current_edge": _norm(shear) * _norm(speed),
  
         # geometrija
-        "slope": _norm(static["slope"]),
         "dist_structure": _near(static["dist_structure"], 4.0),
+ 
+        # Prelomi dna nadjeni iz batimetrije, a ne iz rucnog spiska tacaka.
+        "auto_struktura": _auto_struktura(static),
+        # Bistra voda: kd490 oko 0.04 je bistro, preko 0.15 mutno.
+        "bistrina": (np.clip((0.15 - kd490) / 0.11, 0, 1)
+                     if kd490 is not None else None),
+        # Temperatura uz dno govori vise od povrsinske za ribu koja stoji
+        # uz seku na 30-70 m, pogotovo u jesen kad se self hladi odozdo.
+        "pridnena_temp": (_band(bottom_t, 15.0, 24.0)
+                          if bottom_t is not None else None),
+        # Kad termoklina legne na dubinu seke, plijen se skuplja na tom spoju.
+        "termoklina_na_dnu": _spoj(z_thermo, depth),
         "dist_shelf_edge": _near(static["dist_shelf_edge"], 6.0),
-        "canyon_depth": _band(depth, 400.0, 1400.0),
+        # Domen je odsjecen na 250 m, pa "duboko" znaci ivica selfa
+        "canyon_depth": _band(depth, 150.0, MAX_DUBINA_M),
         "surf_zone": _band(depth, 2.0, 15.0) * _near(static["dist_bojana"], 15.0),
         "bojana_plume": plume,
         # uzak pojas 0.3-1.5 km od obale - tu prolaze male sabljarke
@@ -161,6 +176,8 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         "diel": ones,
     }
  
+    predictors = {k: v for k, v in predictors.items() if v is not None}
+ 
     vertical = dict(
         termoklina_m=_med(z_thermo), termoklina_C_po_m=_med(thermo_strength),
         dcm_m=_med(z_dcm), dcm_odnos=_med(dcm_ratio),
@@ -169,6 +186,26 @@ def build_predictors(*, sst, sst_lag3, sst_lag7, chl_surf,
         dohvatljivost=_med(reach), prey_center=prey_c,
     )
     return predictors, vertical
+ 
+ 
+def _auto_struktura(static: dict):
+    """
+    Blizina preloma dna nadjenog iz batimetrije.
+ 
+    Ako detekcija nije nasla nista, vraca se None umjesto praznog polja -
+    inace bi jedan nedostupan sloj ponistio cio skor za vrstu.
+    """
+    ds = static.get("dist_seka")
+    if ds is None or not np.isfinite(ds).any():
+        return None
+    return _near(np.nan_to_num(ds, nan=1e6), 3.0)
+ 
+ 
+def _spoj(z_thermo: np.ndarray, depth: np.ndarray,
+          sirina: float = 15.0) -> np.ndarray:
+    """Koliko termoklina lezi blizu dna - 1 kad se poklapaju, 0 kad su daleko."""
+    razlika = np.abs(np.nan_to_num(z_thermo, nan=1e4) - depth)
+    return np.exp(-razlika / sirina)
  
  
 def depth_band_for(sp: Species, depth: np.ndarray,
