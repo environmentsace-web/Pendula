@@ -17,6 +17,11 @@ FORECAST_DAYS = 3          # danas + 2
 # Panula se ne vuce dublje od ovoga bez obzira na dubinu mora.
 # Zona ciji sloj plijena lezi ispod ove granice nije upotrebljiva.
 MAX_TROLL_DEPTH = 50.0     # m od povrsine
+ 
+# Dno dublje od ovoga je predaleko od obale za jednodnevni izlazak.
+# Sve preko izlazi iz domena, pa i vrste koje bi ga inace koristile
+# (tuna, sabljarka) rade na ivici selfa unutar ove granice.
+MAX_DUBINA_M = 250.0
 SST_TENDENCY_LAGS = (3, 7)  # dana unazad za dSST/dt
  
 # ------------------------------------------------------- COPERNICUS MARINE
@@ -49,7 +54,7 @@ DATASETS = {
     "temp3d": dict(
         product="MEDSEA_ANALYSISFORECAST_PHY_006_013",
         must=["tem", "p1d"], prefer=["4.2km"], avoid=["p1m", "detided"],
-        variables=["thetao"], max_depth=250.0,   # dataset ima i bottomT
+        variables=["thetao", "bottomT"], max_depth=250.0,
     ),
     # 3D salinitet -> haloklina, pluma Bojane
     "sal3d": dict(
@@ -81,6 +86,13 @@ DATASETS = {
         product="MEDSEA_ANALYSISFORECAST_BGC_006_014",
         must=["nut", "p1d"], prefer=["4.2km"], avoid=["p1m"],
         variables=["no3"], max_depth=200.0,
+    ),
+    # Prozirnost vode - koeficijent slabljenja svjetlosti.
+    # Gof lovi okom i trazi bistru vodu.
+    "optika": dict(
+        product="MEDSEA_ANALYSISFORECAST_BGC_006_014",
+        must=["optics", "p1d"], prefer=["4.2km"], avoid=["p1m"],
+        variables=["kd490"],
     ),
     # Talasi
     "waves": dict(
