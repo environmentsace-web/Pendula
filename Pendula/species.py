@@ -96,11 +96,12 @@ SPECIES: Dict[str, Species] = {
         months=_m(m9=0.6, m10=1.0, m11=1.0, m12=0.6),
         sst_range=(16.0, 22.0), sst_tolerance=3.0, depth_pref=(20.0, 100.0),
         weights={
-            "forage_index": 0.30,
+            "forage_index": 0.25,
             "current_edge": 0.25,       # ivica struje, rtovi
             "sst_front": 0.20,
             "depth_band": 0.15,         # 20-100 m
-            "diel": 0.10,
+            "auto_struktura": 0.10,     # lovi oko rtova i preloma dna
+            "diel": 0.05,
         },
         troll_depth_m=(0.0, 25.0), follows_dcm=True,
         troll_speed_kn=(4.0, 6.5),
@@ -109,7 +110,7 @@ SPECIES: Dict[str, Species] = {
     "tuna": Species(
         key="tuna", naziv="Tuna", latinski="Thunnus thynnus",
         months=_m(m5=0.4, m6=0.5, m7=0.6, m8=0.7, m9=1.0, m10=1.0, m11=0.8, m12=0.4),
-        sst_range=(18.0, 26.0), sst_tolerance=4.0, depth_pref=(200.0, 1200.0),
+        sst_range=(18.0, 26.0), sst_tolerance=4.0, depth_pref=(120.0, 250.0),
         weights={
             "dist_shelf_edge": 0.30,
             "depth_band": 0.20,         # >200 m
@@ -124,9 +125,9 @@ SPECIES: Dict[str, Species] = {
     "sabljarka": Species(
         key="sabljarka", naziv="Sabljarka", latinski="Xiphias gladius",
         months=_m(m6=0.5, m7=0.8, m8=1.0, m11=0.4),
-        sst_range=(19.0, 27.0), sst_tolerance=4.0, depth_pref=(400.0, 1200.0),
+        sst_range=(19.0, 27.0), sst_tolerance=4.0, depth_pref=(150.0, 250.0),
         weights={
-            "canyon_depth": 0.30,       # duboko, izvan selfa
+            "canyon_depth": 0.30,       # najdublje sto domen dozvoljava
             "forage_index": 0.20,
             "chl_gradient": 0.15,
             "thermocline_depth": 0.15,
@@ -156,11 +157,14 @@ SPECIES: Dict[str, Species] = {
         months=_m(m6=0.7, m7=0.9, m8=1.0, m9=1.0, m10=0.9, m11=0.5),
         sst_range=(19.0, 26.0), sst_tolerance=3.0, depth_pref=(20.0, 80.0),
         weights={
-            "dist_structure": 0.40,
-            "slope": 0.20,
-            "depth_band": 0.15,         # 20-80 m
-            "current_edge": 0.15,
-            "forage_index": 0.10,
+            "auto_struktura": 0.22,     # prelomi dna nadjeni iz batimetrije
+            "dist_structure": 0.13,     # poznate seke i olupine
+            "termoklina_na_dnu": 0.15,  # spoj termokline i dubine seke
+            "bistrina": 0.15,           # lovi okom, trazi bistru vodu
+            "pridnena_temp": 0.10,
+            "depth_band": 0.10,         # 20-80 m
+            "current_edge": 0.10,       # jede kad voda radi
+            "forage_index": 0.05,
         },
         troll_depth_m=(15.0, 50.0), follows_dcm=False,
         troll_speed_kn=(2.5, 4.5),
