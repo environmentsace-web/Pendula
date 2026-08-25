@@ -233,6 +233,18 @@ def _meteo_max(met, field: str, default: float) -> float:
         return default
  
  
+def _opciono(ds, ime, sel, rg, surf):
+    """Polje ako postoji; None ako dataset nije stigao ili nema tu varijablu."""
+    if ds is None or ime not in getattr(ds, "data_vars", {}):
+        log.info("Sloj '%s' nije dostupan - model radi bez njega.", ime)
+        return None
+    try:
+        return rg(surf(ds[ime].sel(**sel)))
+    except Exception as e:
+        log.warning("Sloj '%s' ne mogu procitati (%s)", ime, e)
+        return None
+ 
+ 
 def _levels(ds) -> np.ndarray:
     for d in ("depth", "deptht", "lev"):
         if d in ds.coords:
@@ -321,6 +333,8 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
         chl_levels=_levels(bgc["chl3d"]),
         theta=rg(phy["temp3d"]["thetao"].sel(**sel)),
         theta_levels=_levels(phy["temp3d"]),
+        bottom_t=_opciono(phy["temp3d"], "bottomT", sel, rg, surf),
+        kd490=_opciono(bgc.get("optika"), "kd490", sel, rg, surf),
         salinity=rg(surf(phy["sal3d"]["so"].sel(**sel))),
         u=rg(surf(phy["currents"]["uo"].sel(**sel))),
         v=rg(surf(phy["currents"]["vo"].sel(**sel))),
@@ -358,6 +372,8 @@ def _synthetic_day(day, stat, lats, lons) -> dict:
         theta=theta, theta_levels=levels, salinity=sal,
         u=rng.normal(0, 0.12, LAT.shape), v=rng.normal(0, 0.12, LAT.shape),
         mld=np.full_like(sst, 22.0),
+        kd490=np.full_like(sst, 0.07) + 0.05 * np.exp(-stat["dist_bojana"] / 8.0),
+        bottom_t=np.clip(sst - 0.03 * np.nan_to_num(depth, nan=0.0), 12.0, None),
         wave_max_m=0.7 + 0.5 * (day.toordinal() % 3),
         wind_kn=9.0, gust_kn=14.0, flotsam=0.55,
     )
