@@ -467,11 +467,12 @@ function napraviMapu(){
     more: L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
       {attribution:'Esri, GEBCO, NOAA &middot; podaci: Copernicus Marine, EMODnet',
-       maxZoom:18, maxNativeZoom:13, className:"morska-karta"}
+       maxZoom:11, className:"morska-karta"}
     ),
   };
   podloga = "more";
-  podloge[podloga].addTo(map);
+  azurirajPodlogu();
+  map.on("zoomend", azurirajPodlogu);
 
   izoSloj = L.layerGroup().addTo(map);   // uvijek ispod zona
   sloj = L.layerGroup().addTo(map);
@@ -480,15 +481,36 @@ function napraviMapu(){
   map.on("click", e => { if(mjerenje) dodajTacku(e.latlng); });
 }
 
-/* Prebacivanje podloge: morska karta ima sjencenje dubina, tamna je citljivija
-   za imena mjesta. */
+const MORE_DO_ZUMA = 11;   // dalje od ovoga Esri nema podatke za nase more
+
+/* Bira koja se podloga zaista crta.
+
+   Morska karta ima sjencenje dubina, ali svjetsku pokrivenost samo do
+   jedanaestog nivoa uvecanja; preko toga vraca sivu plocu sa natpisom da
+   podataka nema. Zato se pri vecem uvecanju sama smjenjuje tamnom kartom,
+   koja ide do kraja. */
+function azurirajPodlogu(){
+  const duboko = map.getZoom() > MORE_DO_ZUMA;
+  const treba = (podloga === "more" && !duboko) ? "more" : "tamna";
+
+  for(const [ime, sl] of Object.entries(podloge)){
+    if(ime === treba && !map.hasLayer(sl)) sl.addTo(map).bringToBack();
+    if(ime !== treba && map.hasLayer(sl)) map.removeLayer(sl);
+  }
+
+  const b = document.getElementById("karta");
+  if(!b) return;
+  b.textContent = podloga === "more" ? "\u25F3" : "\u25E9";
+  b.title = podloga === "more"
+    ? (duboko ? "Morska karta - nema je na ovom uvecanju, prikazana je tamna"
+              : "Morska karta - prebaci na tamnu")
+    : "Tamna karta - prebaci na morsku";
+  b.style.opacity = (podloga === "more" && duboko) ? ".55" : "1";
+}
+
 function prebaciPodlogu(){
-  map.removeLayer(podloge[podloga]);
   podloga = podloga === "more" ? "tamna" : "more";
-  podloge[podloga].addTo(map).bringToBack();
-  document.getElementById("karta").textContent = podloga === "more" ? "\u25F3" : "\u25E9";
-  document.getElementById("karta").title =
-    podloga === "more" ? "Morska karta - prebaci na tamnu" : "Tamna karta - prebaci na morsku";
+  azurirajPodlogu();
 }
 
 /* Matične luke kao referentne tačke - klikom se dodaju u daljinar. */
@@ -709,7 +731,8 @@ async function osvjezi(){
       granice.push(...poly.getLatLngs()[0]);
     });
   });
-  if(granice.length) map.fitBounds(L.latLngBounds(granice).pad(.25));
+  if(granice.length) map.fitBounds(L.latLngBounds(granice).pad(.25),
+                                  {maxZoom: MORE_DO_ZUMA});
 }
 
 /* --------------------------------------------------- upozorenje */
@@ -868,7 +891,7 @@ function crtajZone(skupovi){
       const k = ev.target.closest(".koord");
       if(k){ kopiraj(k.dataset.koord, k); return; }
       const ll = f.geometry.coordinates[0].map(c=>[c[1],c[0]]);
-      map.fitBounds(L.latLngBounds(ll).pad(.6));
+      map.fitBounds(L.latLngBounds(ll).pad(.6), {maxZoom: 13});
     };
     box.appendChild(b);
   });
