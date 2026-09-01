@@ -467,7 +467,7 @@ function napraviMapu(){
     more: L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
       {attribution:'Esri, GEBCO, NOAA &middot; podaci: Copernicus Marine, EMODnet',
-       maxZoom:11, className:"morska-karta"}
+       maxZoom:10, className:"morska-karta"}
     ),
   };
   podloga = "more";
@@ -481,7 +481,8 @@ function napraviMapu(){
   map.on("click", e => { if(mjerenje) dodajTacku(e.latlng); });
 }
 
-const MORE_DO_ZUMA = 11;   // dalje od ovoga Esri nema podatke za nase more
+const MORE_DO_ZUMA = 10;   // dalje od ovoga Esri nema podatke za nase more
+                           // (svjetska pokrivenost ide do razmjere 1:577k)
 
 /* Bira koja se podloga zaista crta.
 
