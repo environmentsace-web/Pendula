@@ -3,7 +3,7 @@
    i sam interfejs se otvara i bez mreze. Podaci o zonama se uvijek povlace
    svjezi - stari podaci bi bili gori od nikakvih. */
 
-const KES = "pendula-v2";   // podici broj pri svakoj izmjeni interfejsa
+const KES = "pendula-v3";   // podici broj pri svakoj izmjeni interfejsa
 const OKOSNICA = [
   "./",
   "./index.html",
