@@ -3,27 +3,27 @@ Konfiguracija - domen, izvori podataka, pragovi.
 Potez Petrovac -> Ada Bojana (more ispred usca Bojane i samo usce, bez rijeke).
 """
 from dataclasses import dataclass, field
- 
+
 # ---------------------------------------------------------------- DOMEN
 # Lustica (rt Ostro) ~42.40N 18.53E ; usce Bojane ~41.85N 19.35E
 # Zapadna/juzna granica gura domen preko ivice selfa ka Juznojadranskoj kotlini.
 BBOX = dict(lon_min=18.45, lon_max=19.50, lat_min=41.60, lat_max=42.45)
- 
+
 # Analiticka mreza = nativna mreza satelitskog SST-a (0.01 deg ~ 1.1 km lat)
 GRID_RES = 0.01
- 
+
 FORECAST_DAYS = 3          # danas + 2
- 
+
 # Panula se ne vuce dublje od ovoga bez obzira na dubinu mora.
 # Zona ciji sloj plijena lezi ispod ove granice nije upotrebljiva.
 MAX_TROLL_DEPTH = 50.0     # m od povrsine
- 
+
 # Dno dublje od ovoga je predaleko od obale za jednodnevni izlazak.
 # Sve preko izlazi iz domena, pa i vrste koje bi ga inace koristile
 # (tuna, sabljarka) rade na ivici selfa unutar ove granice.
 MAX_DUBINA_M = 250.0
 SST_TENDENCY_LAGS = (3, 7)  # dana unazad za dSST/dt
- 
+
 # ------------------------------------------------------- COPERNICUS MARINE
 # Pristup preko copernicusmarine toolbox-a; kredencijali iz env varijabli
 # COPERNICUSMARINE_SERVICE_USERNAME / _PASSWORD
@@ -36,7 +36,7 @@ DATASETS = {
         product="SST_MED_SST_L4_NRT_OBSERVATIONS_010_004",
         must=["sst", "l4"], prefer=["0.01", "uhr", "_c_"],
         avoid=["anomaly", "ssta", "climatology"],
-        variables=["analysed_sst"],
+        variables=["analysed_sst", "analysis_error"],
     ),
     # Povrsinske struje, 1/24 stepena, 10 dana prognoze
     "currents": dict(
@@ -101,17 +101,17 @@ DATASETS = {
         variables=["VHM0", "VTPK", "VMDR"],
     ),
 }
- 
+
 # NAPOMENA: identifikatori datasetova se povremeno mijenjaju uz nove verzije
 # produkata. Prije prvog pokretanja provjeriti sa:
 #   copernicusmarine describe --contains MEDSEA_ANALYSISFORECAST_PHY_006_013
- 
+
 # Meteo bez kljuca (vjetar, pritisak, oblacnost, padavine)
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 # Proticaj Bojane (GloFAS) - za plumu i naplavine
 OPEN_METEO_FLOOD = "https://flood-api.open-meteo.com/v1/flood"
 BOJANA_GAUGE = dict(lat=41.87, lon=19.36)
- 
+
 # ------------------------------------------------------------- UPOZORENJA
 @dataclass
 class SafetyThresholds:
@@ -120,10 +120,10 @@ class SafetyThresholds:
     wind_amber: float = 11.0     # cvorova
     wind_red: float = 15.0       # cvorova
     gust_red: float = 22.0       # cvorova
- 
- 
+
+
 SAFETY = SafetyThresholds()
- 
+
 # ------------------------------------------------------------- ZONIRANJE
 @dataclass
 class ZoneParams:
@@ -133,10 +133,10 @@ class ZoneParams:
     smooth_sigma: float = 1.5     # gausovo glacanje skora prije konturisanja
     simplify_deg: float = 0.004   # pojednostavljenje poligona
     max_zones_per_species: int = 6
- 
- 
+
+
 ZONES = ZoneParams()
- 
+
 # ------------------------------------------------------- STATICKI SLOJEVI
 # Racunaju se jednom iz EMODnet/GEBCO batimetrije i kesiraju kao NetCDF
 STATIC_CACHE = "data/static_layers.nc"
@@ -148,7 +148,7 @@ STATIC_VARS = [
     "dist_bojana",        # km do usca Bojane
     "dist_coast",         # km do obale
 ]
- 
+
 # Poznate strukture (seke, olupine, rtovi) - dopunjavati iz iskustva
 STRUCTURES = [
     dict(name="Platamuni", lat=42.243, lon=18.719),
@@ -157,6 +157,5 @@ STRUCTURES = [
     dict(name="Stari Ulcinj / Mendra", lat=41.916, lon=19.196),
     dict(name="Usce Bojane", lat=41.852, lon=19.353),
 ]
- 
+
 OUTPUT_DIR = "public"      # staticki JSON/GeoJSON koji cita Artifact
- 

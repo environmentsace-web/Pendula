@@ -2,44 +2,44 @@
 Preuzimanje podataka. Zahtijeva mrezu i Copernicus nalog:
   export COPERNICUSMARINE_SERVICE_USERNAME=...
   export COPERNICUSMARINE_SERVICE_PASSWORD=...
- 
+
 Sve funkcije kesiraju na disk. Ako preuzimanje padne, koristi se posljednje
 uspjesno polje i to se oznacava u izlazu (polje `zastarjelo`), da korisnik
 nikad ne dobije star podatak predstavljen kao svjez.
 """
 from __future__ import annotations
- 
+
 import datetime as dt
 import logging
 from pathlib import Path
- 
+
 import numpy as np
 import requests
 import xarray as xr
- 
+
 from . import catalog
 from .config import (BBOX, DATASETS, OPEN_METEO_FORECAST, OPEN_METEO_FLOOD,
                      BOJANA_GAUGE, FORECAST_DAYS)
- 
+
 log = logging.getLogger(__name__)
 CACHE = Path("data/cache")
 CACHE.mkdir(parents=True, exist_ok=True)
- 
- 
+
+
 def _subset(key: str, start: dt.date, end: dt.date, **kw) -> xr.Dataset:
     """Tanak omotac oko copernicusmarine.subset sa kesiranjem."""
     import copernicusmarine as cm
- 
+
     spec = DATASETS[key]
     dataset_id = catalog.resolve(
         key, spec["product"], spec["must"],
         spec.get("prefer", ()), spec.get("avoid", ()))
- 
+
     # Prvi nivo dubine nije 0 m nego oko 1 m, pa ne zadajemo donju granicu.
     # Gornju saljemo samo za 3D slojeve; povrsinski se biraju kasnije.
     if spec.get("max_depth"):
         kw.setdefault("maximum_depth", spec["max_depth"])
- 
+
     out = CACHE / f"{key}_{start:%Y%m%d}_{end:%Y%m%d}.nc"
     if not out.exists():
         cm.subset(
@@ -54,8 +54,8 @@ def _subset(key: str, start: dt.date, end: dt.date, **kw) -> xr.Dataset:
             **kw,
         )
     return xr.open_dataset(out)
- 
- 
+
+
 def _subset_safe(key, start, end, **kw):
     """Kao _subset, ali ako imena varijabli ne odgovaraju, skida sve."""
     try:
@@ -83,8 +83,8 @@ def _subset_safe(key, start, end, **kw):
             spec["variables"] = saved
         log.info("Dostupne varijable u '%s': %s", key, list(ds.data_vars))
         return ds
- 
- 
+
+
 def pick(ds, *candidates):
     """Prva varijabla iz dataseta koja postoji medju ponudjenim imenima."""
     for c in candidates:
@@ -97,8 +97,8 @@ def pick(ds, *candidates):
     if len(ds.data_vars) == 1:
         return ds[list(ds.data_vars)[0]]
     raise KeyError(f"Nema nijedne od {candidates}; postoji: {list(ds.data_vars)}")
- 
- 
+
+
 def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
                        min_coverage: float = 0.35) -> tuple[xr.DataArray, dt.date]:
     """
@@ -121,7 +121,7 @@ def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
             return chl, day
         log.info("OLCI %s pokrivanje samo %.0f%% - trazim dalje",
                  day, coverage * 100)
- 
+
     log.warning("Prelazim na L4 gap-free (interpolirano)")
     for back in range(max_lookback):
         day = today - dt.timedelta(days=back)
@@ -131,8 +131,8 @@ def latest_chlorophyll(today: dt.date, max_lookback: int = 7,
         except Exception:
             continue
     raise RuntimeError("Nema dostupnog hlorofila u posljednjih 7 dana")
- 
- 
+
+
 def sst_with_history(today: dt.date, lags=(3, 7)):
     """Satelitski SST za danas i za zadate pomake unazad (za tendenciju)."""
     start = today - dt.timedelta(days=max(lags) + 2)
@@ -140,9 +140,14 @@ def sst_with_history(today: dt.date, lags=(3, 7)):
     sst = pick(ds, "analysed_sst", "adjusted_sea_surface_temperature", "sst")
     if sst.attrs.get("units", "").lower() in ("kelvin", "k"):
         sst = sst - 273.15
-    return sst
- 
- 
+
+    # Analiza sama procjenjuje koliko je nesigurna. Pod duzom naoblakom se
+    # oslanja na starije snimke, polje se zaglacava i greska raste - a bez
+    # ovoga bi aplikacija i tada pokazivala jednako samouvjerene fronte.
+    greska = ds["analysis_error"] if "analysis_error" in ds.data_vars else None
+    return sst, greska
+
+
 def physics_forecast(today: dt.date):
     """Struje, MLD, 3D temperatura i salinitet - danas + prognoza."""
     end = today + dt.timedelta(days=FORECAST_DAYS)
@@ -152,8 +157,8 @@ def physics_forecast(today: dt.date):
         "temp3d": _subset_safe("temp3d", today, end),
         "sal3d": _subset_safe("sal3d", today, end),
     }
- 
- 
+
+
 def bgc_forecast(today: dt.date):
     """3D hlorofil, nitrati i prozirnost -> DCM, nutriklina, bistrina."""
     end = today + dt.timedelta(days=FORECAST_DAYS)
@@ -162,13 +167,13 @@ def bgc_forecast(today: dt.date):
         "no3": _subset_safe("nutrients", today, end),
         "optika": _subset_safe("optika", today, end),
     }
- 
- 
+
+
 def waves_forecast(today: dt.date):
     end = today + dt.timedelta(days=FORECAST_DAYS)
     return _subset_safe("waves", today, end)
- 
- 
+
+
 def _get_json(url: str, params: dict, tries: int = 3,
               timeout: int = 60) -> dict | None:
     """HTTP upit sa ponovnim pokusajima. Vraca None ako sve propadne."""
@@ -185,8 +190,8 @@ def _get_json(url: str, params: dict, tries: int = 3,
             if i < tries - 1:
                 time.sleep(wait)
     return None
- 
- 
+
+
 def meteo(lat: float, lon: float) -> dict | None:
     """Vjetar, udari, pritisak, padavine - Open-Meteo, bez kljuca."""
     out = _get_json(OPEN_METEO_FORECAST, {
@@ -201,8 +206,8 @@ def meteo(lat: float, lon: float) -> dict | None:
     if out is None:
         log.warning("Meteo nedostupan - upozorenja se racunaju samo iz talasa")
     return out
- 
- 
+
+
 def bojana_discharge() -> dict:
     """
     Proticaj Bojane (GloFAS). Kljucno za dvije stvari: jacinu bocatne plume
@@ -215,8 +220,8 @@ def bojana_discharge() -> dict:
         "past_days": 7,
         "forecast_days": FORECAST_DAYS,
     })
- 
- 
+
+
 def flotsam_index(discharge: dict | None) -> float:
     """
     Indeks naplavina 0..1: odnos maksimalnog proticaja u prozoru od 2-5 dana
@@ -232,4 +237,3 @@ def flotsam_index(discharge: dict | None) -> float:
     if not window or not baseline:
         return 0.0
     return float(np.clip((max(window) / baseline - 1.0) / 2.0, 0, 1))
- 

@@ -297,6 +297,21 @@ def _po_dijelovima(vrsta: str, score, depth, lons) -> None:
                  float(v.max()), iznad)
 
 
+def _pouzdanost(chl_udio: float, sst_greska, ima_meteo: bool) -> float:
+    """
+    Koliko se danasnjoj slici moze vjerovati, 0..1.
+
+    Tri stvari je obaraju: oblaci nad hlorofilom, visoka procjena greske u
+    temperaturnoj analizi (znak da se oslanja na starije snimke) i izostanak
+    meteo podataka. Ne mijenja skor - samo se prikazuje, da korisnik zna
+    koliko da vjeruje onome sto vidi.
+    """
+    a = float(np.clip((chl_udio - 0.25) / 0.60, 0, 1))
+    b = 1.0 if sst_greska is None else float(np.clip((0.70 - sst_greska) / 0.45, 0, 1))
+    p = 0.45 * a + 0.45 * b + 0.10 * (1.0 if ima_meteo else 0.0)
+    return round(float(np.clip(p, 0, 1)), 2)
+
+
 def _izgledi(skor: float) -> str:
     """
     Rijec uz broj. Skor je relativan u odnosu na domen, pa broj bez opisa
@@ -365,11 +380,12 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
 
     if not _BUNDLE:
         log.info("Preuzimam podatke jednom za sva %d dana...", FORECAST_DAYS)
-        sst_hist = fetch.sst_with_history(today, SST_TENDENCY_LAGS)
+        sst_hist, sst_greska = fetch.sst_with_history(today, SST_TENDENCY_LAGS)
         _log_res("SST", sst_hist)
         chl, chl_date = fetch.latest_chlorophyll(today)
         _BUNDLE.update(
-            sst_hist=sst_hist, chl=chl, chl_date=chl_date,
+            sst_hist=sst_hist, sst_greska=sst_greska,
+            chl=chl, chl_date=chl_date,
             phy=fetch.physics_forecast(today),
             bgc=fetch.bgc_forecast(today),
             wav=fetch.waves_forecast(today),
@@ -379,6 +395,7 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
         log.info("Preuzimanje zavrseno.")
 
     sst_hist = _BUNDLE["sst_hist"]
+    sst_greska = _BUNDLE["sst_greska"]
     chl, chl_date = _BUNDLE["chl"], _BUNDLE["chl_date"]
     phy, bgc, wav = _BUNDLE["phy"], _BUNDLE["bgc"], _BUNDLE["wav"]
     met, q = _BUNDLE["met"], _BUNDLE["q"]
@@ -418,6 +435,21 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
     log.info("Hlorofil: satelit pokriva %.0f%% domena, ostatak iz modela.",
              udio * 100)
     sources.setdefault("hlorofil_pokrivanje", round(udio, 2))
+
+    # Pouzdanost dana: koliko je od slike stvarno vidjeno, a koliko izvedeno.
+    gr = None
+    if sst_greska is not None:
+        try:
+            gr = float(np.nanmean(rg(sst_greska.sel(**sel))))
+        except Exception:
+            gr = None
+    pouzdanost = _pouzdanost(udio, gr, met is not None)
+    sources.setdefault("pouzdanost", pouzdanost)
+    if sst_greska is not None and gr is not None:
+        sources.setdefault("sst_greska_C", round(gr, 2))
+    log.info("Pouzdanost dana: %d%% (satelit %.0f%%, greska SST %s)",
+             round(pouzdanost * 100), udio * 100,
+             f"{gr:.2f} C" if gr is not None else "nepoznata")
 
     return dict(
         sst=rg(sst_hist.sel(**sel)),
