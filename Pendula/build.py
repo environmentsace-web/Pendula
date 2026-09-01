@@ -1,43 +1,43 @@
 """
 Orkestrator - jedan dnevni ciklus.
- 
+
     python -m panula.build            # stvarni podaci (trazi Copernicus nalog)
     python -m panula.build --sinteticki   # bez mreze, za provjeru logike
- 
+
 Izlaz je staticki GeoJSON u public/ koji frontend cita bez ikakvog kljuca.
 """
 from __future__ import annotations
- 
+
 import argparse
 import datetime as dt
 import json
 import logging
 from pathlib import Path
- 
+
 import numpy as np
- 
+
 from . import fields, predictors, static, zones
 from .config import (FORECAST_DAYS, MAX_TROLL_DEPTH, OUTPUT_DIR, SAFETY,
                      SST_TENDENCY_LAGS)
 from .species import SPECIES
- 
+
 log = logging.getLogger("panula")
- 
- 
+
+
 def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
     today = today or dt.date.today()
     out = Path(OUTPUT_DIR).resolve()
     out.mkdir(parents=True, exist_ok=True)
     log.info("Izlaz ide u: %s", out)
- 
+
     lats, lons = static.analysis_grid()
     stat = static.synthetic() if synthetic else static.build()
- 
+
     # Interfejs se objavljuje zajedno sa podacima, da telefon moze da ga
     # otvori sa adrese i sacuva kao aplikaciju. Lokalni fajl na telefonu
     # ne moze dobiti svoju ikonicu ni puni ekran.
     _kopiraj_interfejs(out)
- 
+
     # Izobate su stalna osnova: prave se jednom i poslije samo stoje.
     # Prepisuju se same cim se promijene pravila po kojima su nacrtane.
     iz_path = out / "izobate.geojson"
@@ -48,7 +48,7 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
             stari = json.loads(iz_path.read_text()).get("potpis")
         except Exception:
             stari = None
- 
+
     if stari == potpis:
         log.info("Izobate vec odgovaraju pravilima (%s) - ne diram ih.", potpis)
     else:
@@ -62,41 +62,41 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
         iz_path.write_text(json.dumps(iz, ensure_ascii=False), encoding="utf-8")
         log.info("Izobate: %d linija, %.0f kB, potpis %s",
                  len(iz["features"]), iz_path.stat().st_size / 1024, potpis)
- 
+
     days = [today + dt.timedelta(days=i) for i in range(FORECAST_DAYS)]
     sources, written = {}, []
- 
+
     for day in days:
         if synthetic:
             data = _synthetic_day(day, stat, lats, lons)
         else:
             data = _fetch_day(day, today, stat, lats, lons, sources)
- 
+
         # vjetar ide samo u upozorenja, ne u prediktore
         wind_kn = data.pop("wind_kn", 8.0)
         gust_kn = data.pop("gust_kn", 12.0)
- 
+
         preds, vert = predictors.build_predictors(
             lats=lats, lons=lons, static=stat, date=day, **data)
- 
+
         safety = zones.safety_status(
             data["wave_max_m"], wind_kn, gust_kn, SAFETY)
- 
+
         for key, sp in SPECIES.items():
             pr = sp.profil(day.month)
             layers = dict(preds)
             layers["depth_band"] = predictors.depth_band_for(
                 sp, stat["depth"], day.month)
- 
+
             score = zones.score_species(sp, day.month, layers)
             if day == days[0]:
                 _po_dijelovima(key, score, stat["depth"], lons)
             feats = zones.extract_zones(score, lats, lons, drivers=layers,
                                         weights=pr["weights"])
- 
+
             # Kad nema nijedne zone, korisniku treba razlog a ne prazan ekran.
             prazno = None if feats else _zasto_prazno(sp, day, layers)
- 
+
             depth_field = fields.troll_depth_advice(
                 pr["troll_depth_m"], vert["prey_center"], pr["follows_dcm"],
                 MAX_TROLL_DEPTH)
@@ -115,7 +115,7 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
                     preds.get("hladnije_od_okoline_C"), c, lats, lons)
                 f["properties"]["izgledi"] = _izgledi(
                     f["properties"]["score_mean"])
- 
+
             fc = {
                 "type": "FeatureCollection",
                 "properties": {
@@ -143,9 +143,10 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
             path = out / f"{key}_{day.isoformat()}.geojson"
             path.write_text(json.dumps(fc, ensure_ascii=False), encoding="utf-8")
             written.append(path.name)
- 
+
     index = {
-        "generisano": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generisano": dt.datetime.now(dt.timezone.utc)
+                       .isoformat(timespec="seconds").replace("+00:00", "Z"),
         "domen": {"lon": [float(lons[0]), float(lons[-1])],
                   "lat": [float(lats[0]), float(lats[-1])]},
         "dani": [d.isoformat() for d in days],
@@ -161,8 +162,8 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
     for f in sorted(out.iterdir())[:5]:
         log.info("   %s  (%d B)", f.name, f.stat().st_size)
     return index
- 
- 
+
+
 def _res_km(da) -> float:
     """Stvarni korak mreze u km, umjesto rucno upisane oznake."""
     names = set(da.dims) | set(da.coords)
@@ -170,14 +171,14 @@ def _res_km(da) -> float:
     if y in da.coords and da[y].size > 1:
         return round(float(abs(da[y].values[1] - da[y].values[0])) * 111.32, 1)
     return None
- 
- 
+
+
 MJESECI = ["", "januar", "februar", "mart", "april", "maj", "jun", "jul",
            "avgust", "septembar", "oktobar", "novembar", "decembar"]
 KRATKI = ["", "jan", "feb", "mar", "apr", "maj", "jun", "jul",
           "avg", "sep", "okt", "nov", "dec"]
- 
- 
+
+
 def _mjeseci(mjeseci: dict) -> str:
     """Aktivni mjeseci kao citljivi opsezi: 'apr-jun i sep-nov'."""
     aktivni = sorted(m for m, v in mjeseci.items() if v > 0)
@@ -190,13 +191,13 @@ def _mjeseci(mjeseci: dict) -> str:
         else:
             grupe.append(tek); tek = [m]
     grupe.append(tek)
- 
+
     dijelovi = [KRATKI[g[0]] if len(g) == 1 else f"{KRATKI[g[0]]}-{KRATKI[g[-1]]}"
                 for g in grupe]
     return " i ".join(dijelovi) if len(dijelovi) <= 2 else \
            ", ".join(dijelovi[:-1]) + " i " + dijelovi[-1]
- 
- 
+
+
 def _zasto_prazno(sp, day, layers) -> str:
     """Koja kapija je ugasila vrstu - sezona ili temperatura mora."""
     sez = zones.season_gate(sp, day.month)
@@ -205,7 +206,7 @@ def _zasto_prazno(sp, day, layers) -> str:
         if sp.ljeto:
             svi.update({m: v for m, v in sp.ljeto["months"].items() if v > 0})
         return f"Van sezone - {sp.naziv.lower()} se lovi {_mjeseci(svi)}."
- 
+
     kapija = zones.sst_gate(sp, layers["sst"], day.month)
     srednja = float(np.nanmean(layers["sst"]))
     if float(np.nanmax(kapija)) <= 0.02:
@@ -215,20 +216,20 @@ def _zasto_prazno(sp, day, layers) -> str:
                     f"{hi:.0f}  C koju model uzima za ovu vrstu.")
         return (f"More je {srednja:.1f}  C, ispod donje granice od "
                 f"{lo:.0f}  C koju model uzima za ovu vrstu.")
- 
+
     return "Nema podrucja koje prelazi prag - uslovi su ujednaceni."
- 
- 
+
+
 def _kopiraj_interfejs(out: Path) -> None:
     """
     Prenosi fajlove interfejsa u public/.
- 
+
     Folder se trazi po sadrzaju, a ne po mjestu: bilo koji folder koji ima
     index.html je interfejs. Tako radi bez obzira da li je prevucen u
     korijen, u podfolder ili je drugacije nazvan.
     """
     import shutil
- 
+
     kandidati = [f.parent for f in Path(".").glob("**/index.html")
                  if ".git" not in f.parts and "public" not in f.parts]
     if not kandidati:
@@ -242,10 +243,10 @@ def _kopiraj_interfejs(out: Path) -> None:
                 for g in sorted(f.glob("*"))[:12]:
                     log.warning("      %s%s", g.name, "/" if g.is_dir() else "")
         return
- 
+
     izvor = kandidati[0]
     log.info("Interfejs pronadjen u: %s", izvor)
- 
+
     n = 0
     for f in izvor.rglob("*"):
         if f.is_file():
@@ -256,21 +257,21 @@ def _kopiraj_interfejs(out: Path) -> None:
     log.info("Interfejs: preneseno %d fajlova.", n)
     for f in sorted(out.glob("*"))[:8]:
         log.info("   %s", f.name)
- 
- 
+
+
 # Potez se dijeli na tri dijela, da se vidi gdje model uopste ima sta da
 # ponudi. Ako zone stalno izlaze samo na jednoj trecini, razlog je ili u
 # podacima, ili u tome sto je prag relativan pa najbolji dio pokupi sve.
 DIJELOVI = [("Lustica-Petrovac", None, 18.95),
             ("Petrovac-Bar", 18.95, 19.15),
             ("Bar-Ada Bojana", 19.15, None)]
- 
- 
+
+
 def _po_dijelovima(vrsta: str, score, depth, lons) -> None:
     log.info("  %s - po dijelovima poteza:", vrsta)
     prag = np.nanpercentile(score[np.isfinite(score) & (score > 0)], 85) \
         if np.isfinite(score).any() and (score > 0).any() else None
- 
+
     for naziv, lo, hi in DIJELOVI:
         stub = np.ones(len(lons), dtype=bool)
         if lo is not None:
@@ -281,21 +282,21 @@ def _po_dijelovima(vrsta: str, score, depth, lons) -> None:
         dubine = depth[:, stub]
         more = int(np.isfinite(dubine).sum())
         valjani = np.isfinite(isjecak) & (isjecak > 0)
- 
+
         if more == 0:
             log.info("     %-18s nema mora u domenu", naziv)
             continue
         if not valjani.any():
             log.info("     %-18s %5d celija mora, skor svuda nula", naziv, more)
             continue
- 
+
         v = isjecak[valjani]
         iznad = int((v >= prag).sum()) if prag is not None else 0
         log.info("     %-18s %5d celija mora | skor sred %5.1f maks %5.1f | "
                  "iznad praga %d", naziv, more, float(v.mean()),
                  float(v.max()), iznad)
- 
- 
+
+
 def _izgledi(skor: float) -> str:
     """
     Rijec uz broj. Skor je relativan u odnosu na domen, pa broj bez opisa
@@ -306,8 +307,8 @@ def _izgledi(skor: float) -> str:
     if skor >= 25: return "osrednji"
     if skor >= 12: return "slabi"
     return "vrlo slabi"
- 
- 
+
+
 def _meteo_max(met, field: str, default: float) -> float:
     """Najveca vrijednost iz meteo prognoze; podrazumijevana ako je nema."""
     try:
@@ -315,8 +316,8 @@ def _meteo_max(met, field: str, default: float) -> float:
         return float(max(vals)) if vals else default
     except (TypeError, KeyError):
         return default
- 
- 
+
+
 def _opciono(ds, ime, sel, rg, surf):
     """Polje ako postoji; None ako dataset nije stigao ili nema tu varijablu."""
     if ds is None or ime not in getattr(ds, "data_vars", {}):
@@ -327,15 +328,15 @@ def _opciono(ds, ime, sel, rg, surf):
     except Exception as e:
         log.warning("Sloj '%s' ne mogu procitati (%s)", ime, e)
         return None
- 
- 
+
+
 def _levels(ds) -> np.ndarray:
     for d in ("depth", "deptht", "lev"):
         if d in ds.coords:
             return ds[d].values
     raise KeyError(f"Nema koordinate dubine; postoji: {list(ds.coords)}")
- 
- 
+
+
 def _log_res(name, da) -> None:
     names = set(da.dims) | set(da.coords)
     y = "latitude" if "latitude" in names else "lat"
@@ -343,8 +344,8 @@ def _log_res(name, da) -> None:
         step = float(abs(da[y].values[1] - da[y].values[0]))
         log.info("%s: mreza %d tacaka, korak %.4f stepeni (~%.1f km)",
                  name, da[y].size, step, step * 111.32)
- 
- 
+
+
 def _at(field, centroid, lats, lons) -> float:
     if field is None:
         return None
@@ -352,16 +353,16 @@ def _at(field, centroid, lats, lons) -> float:
     i = int(np.argmin(np.abs(lats - centroid[1])))
     v = field[i, j]
     return None if not np.isfinite(v) else round(float(v), 1)
- 
- 
+
+
 # Podaci se preuzimaju JEDNOM za sva tri dana, ne po danu.
 _BUNDLE: dict = {}
- 
- 
+
+
 def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
     """Stvarni podaci. Popunjava `sources` radi izvjestaja o svjezini."""
     from . import fetch
- 
+
     if not _BUNDLE:
         log.info("Preuzimam podatke jednom za sva %d dana...", FORECAST_DAYS)
         sst_hist = fetch.sst_with_history(today, SST_TENDENCY_LAGS)
@@ -376,12 +377,12 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
             q=fetch.bojana_discharge(),
         )
         log.info("Preuzimanje zavrseno.")
- 
+
     sst_hist = _BUNDLE["sst_hist"]
     chl, chl_date = _BUNDLE["chl"], _BUNDLE["chl_date"]
     phy, bgc, wav = _BUNDLE["phy"], _BUNDLE["bgc"], _BUNDLE["wav"]
     met, q = _BUNDLE["met"], _BUNDLE["q"]
- 
+
     sources.setdefault("sst", {
         "datum": str(sst_hist.time.values[-1])[:10],
         "rezolucija_km": _res_km(sst_hist)})
@@ -389,30 +390,42 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
                                     "senzor": "OLCI 300 m"})
     sources.setdefault("struje", {"rezolucija_km": 4.2})
     sources.setdefault("meteo", {"dostupan": met is not None})
- 
+
     sel = dict(time=str(day), method="nearest")
- 
+
     def rg(da):
         """Prebacuje na nasu mrezu bez obzira kako se koordinate zovu."""
         names = set(da.dims) | set(da.coords)
         y = "latitude" if "latitude" in names else "lat"
         x = "longitude" if "longitude" in names else "lon"
         return da.interp({y: lats, x: lons}).values
- 
+
     def surf(da):
         """Povrsinski nivo, ako dataset uopste ima dimenziju dubine."""
         for d in ("depth", "deptht", "lev"):
             if d in da.dims:
                 return da.isel({d: 0})
         return da
- 
+
+    # OLCI je snimak iz svemira: oblaci ostavljaju rupe, a tamo gdje je rupa
+    # ispadaju svi prediktori vezani za hranu. Rupe se popunjavaju modelskim
+    # povrsinskim hlorofilom, koji je uvijek potpun.
+    chl_sat = rg(chl)
+    chl_mod = rg(surf(bgc["chl3d"]["chl"].sel(**sel)))
+    rupe = ~np.isfinite(chl_sat)
+    chl_spoj = np.where(rupe, chl_mod, chl_sat)
+    udio = float(np.mean(~rupe[np.isfinite(stat["depth"])]))
+    log.info("Hlorofil: satelit pokriva %.0f%% domena, ostatak iz modela.",
+             udio * 100)
+    sources.setdefault("hlorofil_pokrivanje", round(udio, 2))
+
     return dict(
         sst=rg(sst_hist.sel(**sel)),
         sst_lag3=rg(sst_hist.sel(time=str(day - dt.timedelta(days=3)),
                                  method="nearest")),
         sst_lag7=rg(sst_hist.sel(time=str(day - dt.timedelta(days=7)),
                                  method="nearest")),
-        chl_surf=rg(chl),
+        chl_surf=chl_spoj,
         chl3d=rg(bgc["chl3d"]["chl"].sel(**sel)),
         chl_levels=_levels(bgc["chl3d"]),
         theta=rg(phy["temp3d"]["thetao"].sel(**sel)),
@@ -428,26 +441,26 @@ def _fetch_day(day, today, stat, lats, lons, sources) -> dict:
         gust_kn=_meteo_max(met, "wind_gusts_10m", 12.0),
         flotsam=fetch.flotsam_index(q),
     )
- 
- 
+
+
 def _synthetic_day(day, stat, lats, lons) -> dict:
     """Polja za provjeru logike bez mreze."""
     rng = np.random.default_rng(day.toordinal())
     LON, LAT = np.meshgrid(lons, lats)
     depth = stat["depth"]
- 
+
     sst = 23.5 - 2.2 / (1 + np.exp(-(LON - 19.05) * 28)) \
         + rng.normal(0, 0.05, LAT.shape)
     sst[np.isnan(depth)] = np.nan
- 
+
     levels = np.array([0, 5, 10, 20, 30, 50, 75, 100, 150, 200], float)
     theta = np.stack([sst - 7.5 / (1 + np.exp(-(z - 35) / 6.0)) for z in levels])
     chl3d = np.stack([
         (0.18 + 0.8 * np.exp(-((z - 45) ** 2) / 450)) * np.ones_like(sst)
         for z in levels])
- 
+
     sal = 38.3 - 4.0 * np.exp(-stat["dist_bojana"] / 9.0)
- 
+
     return dict(
         sst=sst,
         sst_lag3=sst - 0.35, sst_lag7=sst - 0.75,
@@ -461,8 +474,8 @@ def _synthetic_day(day, stat, lats, lons) -> dict:
         wave_max_m=0.7 + 0.5 * (day.toordinal() % 3),
         wind_kn=9.0, gust_kn=14.0, flotsam=0.55,
     )
- 
- 
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     ap = argparse.ArgumentParser()
@@ -470,4 +483,3 @@ if __name__ == "__main__":
     a = ap.parse_args()
     idx = run(synthetic=a.sinteticki)
     print(json.dumps(idx, ensure_ascii=False, indent=2)[:900])
- 
