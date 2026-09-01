@@ -89,6 +89,8 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
                 sp, stat["depth"], day.month)
  
             score = zones.score_species(sp, day.month, layers)
+            if day == days[0]:
+                _po_dijelovima(key, score, stat["depth"], lons)
             feats = zones.extract_zones(score, lats, lons, drivers=layers,
                                         weights=pr["weights"])
  
@@ -254,6 +256,44 @@ def _kopiraj_interfejs(out: Path) -> None:
     log.info("Interfejs: preneseno %d fajlova.", n)
     for f in sorted(out.glob("*"))[:8]:
         log.info("   %s", f.name)
+ 
+ 
+# Potez se dijeli na tri dijela, da se vidi gdje model uopste ima sta da
+# ponudi. Ako zone stalno izlaze samo na jednoj trecini, razlog je ili u
+# podacima, ili u tome sto je prag relativan pa najbolji dio pokupi sve.
+DIJELOVI = [("Lustica-Petrovac", None, 18.95),
+            ("Petrovac-Bar", 18.95, 19.15),
+            ("Bar-Ada Bojana", 19.15, None)]
+ 
+ 
+def _po_dijelovima(vrsta: str, score, depth, lons) -> None:
+    log.info("  %s - po dijelovima poteza:", vrsta)
+    prag = np.nanpercentile(score[np.isfinite(score) & (score > 0)], 85) \
+        if np.isfinite(score).any() and (score > 0).any() else None
+ 
+    for naziv, lo, hi in DIJELOVI:
+        stub = np.ones(len(lons), dtype=bool)
+        if lo is not None:
+            stub &= lons >= lo
+        if hi is not None:
+            stub &= lons < hi
+        isjecak = score[:, stub]
+        dubine = depth[:, stub]
+        more = int(np.isfinite(dubine).sum())
+        valjani = np.isfinite(isjecak) & (isjecak > 0)
+ 
+        if more == 0:
+            log.info("     %-18s nema mora u domenu", naziv)
+            continue
+        if not valjani.any():
+            log.info("     %-18s %5d celija mora, skor svuda nula", naziv, more)
+            continue
+ 
+        v = isjecak[valjani]
+        iznad = int((v >= prag).sum()) if prag is not None else 0
+        log.info("     %-18s %5d celija mora | skor sred %5.1f maks %5.1f | "
+                 "iznad praga %d", naziv, more, float(v.mean()),
+                 float(v.max()), iznad)
  
  
 def _izgledi(skor: float) -> str:
