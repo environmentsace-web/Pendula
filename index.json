@@ -1,5 +1,5 @@
 {
-  "generisano": "2026-09-01T03:20:22Z",
+  "generisano": "2026-09-01T12:27:03Z",
   "domen": {
     "lon": [
       18.45,
@@ -28,11 +28,11 @@
   "granica_dubine_panule_m": 50.0,
   "izvori": {
     "sst": {
-      "datum": "2026-08-31",
+      "datum": "2026-09-01",
       "rezolucija_km": 0.9
     },
     "hlorofil": {
-      "datum": "2026-08-30",
+      "datum": "2026-08-31",
       "senzor": "OLCI 300 m"
     },
     "struje": {
