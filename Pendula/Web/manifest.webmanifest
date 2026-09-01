@@ -1,0 +1,32 @@
+{
+  "name": "Pendula",
+  "short_name": "Pendula",
+  "description": "Zone aktivnosti plave ribe, Luštica - Ada Bojana",
+  "lang": "sr-Latn-ME",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#061924",
+  "theme_color": "#0A2433",
+  "icons": [
+    {
+      "src": "ikone/pendula-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "ikone/pendula-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "ikone/pendula-maskirana-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
