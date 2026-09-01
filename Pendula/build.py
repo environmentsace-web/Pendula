@@ -218,12 +218,32 @@ def _zasto_prazno(sp, day, layers) -> str:
  
  
 def _kopiraj_interfejs(out: Path) -> None:
-    """Prenosi web/ u public/, ako taj folder postoji."""
+    """
+    Prenosi fajlove interfejsa u public/.
+ 
+    Folder se trazi po sadrzaju, a ne po mjestu: bilo koji folder koji ima
+    index.html je interfejs. Tako radi bez obzira da li je prevucen u
+    korijen, u podfolder ili je drugacije nazvan.
+    """
     import shutil
-    izvor = Path("web")
-    if not izvor.is_dir():
-        log.info("Nema foldera 'web' - objavljuju se samo podaci.")
+ 
+    kandidati = [f.parent for f in Path(".").glob("**/index.html")
+                 if ".git" not in f.parts and "public" not in f.parts]
+    if not kandidati:
+        log.warning("Nigdje ne nalazim index.html - objavljuju se samo podaci.")
+        log.warning("Ovo je sadrzaj repozitorijuma:")
+        for f in sorted(Path(".").glob("*")):
+            if f.name.startswith("."):
+                continue
+            log.warning("   %s%s", f.name, "/" if f.is_dir() else "")
+            if f.is_dir():
+                for g in sorted(f.glob("*"))[:12]:
+                    log.warning("      %s%s", g.name, "/" if g.is_dir() else "")
         return
+ 
+    izvor = kandidati[0]
+    log.info("Interfejs pronadjen u: %s", izvor)
+ 
     n = 0
     for f in izvor.rglob("*"):
         if f.is_file():
@@ -231,7 +251,9 @@ def _kopiraj_interfejs(out: Path) -> None:
             cilj.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(f, cilj)
             n += 1
-    log.info("Interfejs: preneseno %d fajlova iz 'web'.", n)
+    log.info("Interfejs: preneseno %d fajlova.", n)
+    for f in sorted(out.glob("*"))[:8]:
+        log.info("   %s", f.name)
  
  
 def _izgledi(skor: float) -> str:
