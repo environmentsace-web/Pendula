@@ -128,6 +128,9 @@ header::after{
   border-bottom:1px solid var(--line);
 }
 .stari::before{content:"\26A0  "}
+.magla{color:var(--cyan);
+  background:linear-gradient(90deg,rgba(87,221,236,.16),transparent 65%)}
+.magla::before{content:"\2601  "}
 
 /* ---------------------------------------------------------- upozorenje */
 .safety{
@@ -328,6 +331,7 @@ aside{
   </header>
 
   <div class="stari" id="stari" hidden></div>
+  <div class="stari magla" id="magla" hidden></div>
 
   <div class="safety zeleno" id="safety" hidden>
     <span class="dot"></span><b id="safety-nivo"></b><span id="safety-razlog"></span>
@@ -621,6 +625,7 @@ async function start(){
   crtajDane();
   crtajIzvore();
   provjeriSvjezinu();
+  upozoriNaPouzdanost();
   await crtajVrste();
   await osvjezi();
 }
@@ -640,6 +645,22 @@ function crtajDane(){
 
 /* Ako dnevni ciklus zakaze, na adresi ostaju jucerasnji fajlovi. Bolje je
    da aplikacija to kaze nego da tiho prikaze stare zone kao danasnje. */
+function bojaPouzdanosti(p){
+  return p >= .7 ? "#7FE0B4" : p >= .45 ? "var(--amber)" : "var(--magenta)";
+}
+
+/* Pod duzom naoblakom satelit ne vidi more: hlorofil se popunjava modelom, a
+   temperaturna analiza se oslanja na starije snimke pa fronte blijede. Model
+   tada i dalje daje zone, ali im treba vjerovati manje. */
+function upozoriNaPouzdanost(){
+  const p = indeks.izvori && indeks.izvori.pouzdanost;
+  const el = document.getElementById("magla");
+  if(p == null || p >= .45){ el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = `Pouzdanost podataka ${Math.round(p*100)}% — satelit slabo `
+    + `vidi more. Zone su izvedene uglavnom iz modela, uzmi ih sa rezervom.`;
+}
+
 function provjeriSvjezinu(){
   const danas = new Date(); danas.setHours(0,0,0,0);
   const prvi = new Date(indeks.dani[0] + "T00:00:00");
@@ -660,6 +681,14 @@ function crtajIzvore(){
     red("Hlorofil", iz.hlorofil ? `${iz.hlorofil.datum} · ${iz.hlorofil.senzor}` : null) +
     red("Struje", iz.struje ? `${iz.struje.rezolucija_km} km` : null) +
     red("Meteo", iz.meteo ? (iz.meteo.dostupan ? "dostupan" : "nedostupan — upozorenja iz talasa") : null) +
+    (iz.pouzdanost != null
+      ? `<div><b>Pouzdanost</b> <span style="color:${bojaPouzdanosti(iz.pouzdanost)}">
+         ${Math.round(iz.pouzdanost*100)}%</span>` +
+        (iz.hlorofil_pokrivanje != null
+          ? ` &middot; satelit ${Math.round(iz.hlorofil_pokrivanje*100)}%` : "") +
+        (iz.sst_greska_C != null ? ` &middot; greška SST ${iz.sst_greska_C} °C` : "") +
+        `</div>`
+      : "") +
     red("Granica panule", (indeks.granica_dubine_panule_m||50) + " m") +
     red("Osvježeno", (indeks.generisano||"").replace("T"," ").replace("Z"," UTC"));
 }

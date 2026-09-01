@@ -1,5 +1,5 @@
 {
-  "generisano": "2026-09-01T13:31:10Z",
+  "generisano": "2026-09-01T13:43:50Z",
   "domen": {
     "lon": [
       18.45,
@@ -41,7 +41,9 @@
     "meteo": {
       "dostupan": true
     },
-    "hlorofil_pokrivanje": 0.46
+    "hlorofil_pokrivanje": 0.46,
+    "pouzdanost": 0.71,
+    "sst_greska_C": 0.02
   },
   "izobate": "izobate.geojson",
   "fajlovi": [
