@@ -33,6 +33,11 @@ def run(today: dt.date | None = None, synthetic: bool = False) -> dict:
     lats, lons = static.analysis_grid()
     stat = static.synthetic() if synthetic else static.build()
  
+    # Interfejs se objavljuje zajedno sa podacima, da telefon moze da ga
+    # otvori sa adrese i sacuva kao aplikaciju. Lokalni fajl na telefonu
+    # ne moze dobiti svoju ikonicu ni puni ekran.
+    _kopiraj_interfejs(out)
+ 
     # Izobate su stalna osnova: prave se jednom i poslije samo stoje.
     # Prepisuju se same cim se promijene pravila po kojima su nacrtane.
     iz_path = out / "izobate.geojson"
@@ -210,6 +215,23 @@ def _zasto_prazno(sp, day, layers) -> str:
                 f"{lo:.0f}  C koju model uzima za ovu vrstu.")
  
     return "Nema podrucja koje prelazi prag - uslovi su ujednaceni."
+ 
+ 
+def _kopiraj_interfejs(out: Path) -> None:
+    """Prenosi web/ u public/, ako taj folder postoji."""
+    import shutil
+    izvor = Path("web")
+    if not izvor.is_dir():
+        log.info("Nema foldera 'web' - objavljuju se samo podaci.")
+        return
+    n = 0
+    for f in izvor.rglob("*"):
+        if f.is_file():
+            cilj = out / f.relative_to(izvor)
+            cilj.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, cilj)
+            n += 1
+    log.info("Interfejs: preneseno %d fajlova iz 'web'.", n)
  
  
 def _izgledi(skor: float) -> str:
