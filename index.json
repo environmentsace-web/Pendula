@@ -1,5 +1,5 @@
 {
-  "generisano": "2026-11-16T10:59:42Z",
+  "generisano": "2026-11-18T11:30:36Z",
   "domen": {
     "lon": [
       18.45,
@@ -11,9 +11,9 @@
     ]
   },
   "dani": [
-    "2026-11-16",
-    "2026-11-17",
-    "2026-11-18"
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20"
   ],
   "vrste": [
     "lampuga",
@@ -28,11 +28,11 @@
   "granica_dubine_panule_m": 50.0,
   "izvori": {
     "sst": {
-      "datum": "2026-11-15",
+      "datum": "2026-11-17",
       "rezolucija_km": 0.9
     },
     "hlorofil": {
-      "datum": "2026-11-15",
+      "datum": "2026-11-17",
       "senzor": "OLCI 300 m"
     },
     "struje": {
@@ -43,26 +43,10 @@
     },
     "hlorofil_pokrivanje": 0.97,
     "pouzdanost": 1.0,
-    "sst_greska_C": 0.07
+    "sst_greska_C": 0.03
   },
   "izobate": "izobate.geojson",
   "fajlovi": [
-    "lampuga_2026-11-16.geojson",
-    "trupac_2026-11-16.geojson",
-    "plamida_2026-11-16.geojson",
-    "tuna_2026-11-16.geojson",
-    "sabljarka_2026-11-16.geojson",
-    "gof_2026-11-16.geojson",
-    "strelka_2026-11-16.geojson",
-    "lica_2026-11-16.geojson",
-    "lampuga_2026-11-17.geojson",
-    "trupac_2026-11-17.geojson",
-    "plamida_2026-11-17.geojson",
-    "tuna_2026-11-17.geojson",
-    "sabljarka_2026-11-17.geojson",
-    "gof_2026-11-17.geojson",
-    "strelka_2026-11-17.geojson",
-    "lica_2026-11-17.geojson",
     "lampuga_2026-11-18.geojson",
     "trupac_2026-11-18.geojson",
     "plamida_2026-11-18.geojson",
@@ -70,6 +54,22 @@
     "sabljarka_2026-11-18.geojson",
     "gof_2026-11-18.geojson",
     "strelka_2026-11-18.geojson",
-    "lica_2026-11-18.geojson"
+    "lica_2026-11-18.geojson",
+    "lampuga_2026-11-19.geojson",
+    "trupac_2026-11-19.geojson",
+    "plamida_2026-11-19.geojson",
+    "tuna_2026-11-19.geojson",
+    "sabljarka_2026-11-19.geojson",
+    "gof_2026-11-19.geojson",
+    "strelka_2026-11-19.geojson",
+    "lica_2026-11-19.geojson",
+    "lampuga_2026-11-20.geojson",
+    "trupac_2026-11-20.geojson",
+    "plamida_2026-11-20.geojson",
+    "tuna_2026-11-20.geojson",
+    "sabljarka_2026-11-20.geojson",
+    "gof_2026-11-20.geojson",
+    "strelka_2026-11-20.geojson",
+    "lica_2026-11-20.geojson"
   ]
 }
